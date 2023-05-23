@@ -1,0 +1,10 @@
+:root {
+  font-size: 300%;
+}
+table {
+  border-collapse: collapse;
+}
+td {
+  border: 0.1em solid black;
+  padding: 0.1em;
+}
