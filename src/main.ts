@@ -6,17 +6,17 @@ import { getById } from "phil-lib/client-misc";
  * This is similar to `numerator % denominator`, i.e. modulo division.
  * The difference is that the result will never be negative.
  * If the numerator is negative `%`  will return a negative number.
- * 
+ *
  * If the 0 point is chosen arbitrarily then you should use `positiveModulo()` rather than `%`.
- * For example, C's `time_t` and JavaScript's `Date.prototype.valueOf()` say that 0 means midnight January 1, 1970. 
+ * For example, C's `time_t` and JavaScript's `Date.prototype.valueOf()` say that 0 means midnight January 1, 1970.
  * Negative numbers refer to times before midnight January 1, 1970, and positive numbers refer to times after midnight January 1, 1970.
  * But midnight January 1, 1970 was chosen arbitrarily, and you probably don't want to treat times before that differently than times after that.
  * And how many people would even think to test a negative date?
- * 
+ *
  * `positiveModulo(n, d)` will give the same result as `positiveModulo(n + d, d)` for all vales of `n` and `d`.
  * (You might get 0 sometimes and -0 other times, but those are both `==` so I'm not worried about that.)
  */
-function positiveModulo(numerator : number, denominator : number) {
+function positiveModulo(numerator: number, denominator: number) {
   const simpleAnswer = numerator % denominator;
   if (simpleAnswer < 0) {
     return simpleAnswer + Math.abs(denominator);
@@ -51,7 +51,7 @@ type AllPieces = ReadonlyArray<ReadonlyArray<Piece>>;
 
 /**
  * Read all of the pieces from the GUI.
- * 
+ *
  * Most of this code does not know or care where this info is stored.
  * And I know the storage will change.
  * Currently the GUI is only good enough for debugging.
@@ -68,17 +68,17 @@ function getPieces(): AllPieces {
 
 /**
  * Update the GUI with a complete list of pieces and positions.
- * 
+ *
  * Most of this code does not know or care where this info is stored.
  * And I know the storage will change.
  * Currently the GUI is only good enough for debugging.
- * 
+ *
  * The GUI will eventually include animations,
  * and that will require more information,
  * so I know this interface will need to change.
  * @param source A valid array of pieces.
  */
-function showPieces(source : AllPieces) {
+function showPieces(source: AllPieces) {
   const mainTable = getById("main", HTMLTableElement);
   const destination = getTableCells(mainTable);
   for (const [destinationRow, sourceRow] of zip(destination, source)) {
@@ -97,19 +97,19 @@ showPieces(getPieces());
  * This does a non-destructive rotate.
  * It will not modify the original.
  * It will return the rotated version.
- * 
+ *
  * E.g.
- * `rotateArray(['A', 'b', 'c', 'd', 'e'], 1)` returns ['b', 'c', 'd', 'e', 'A']. 
- * `rotateArray(['A', 'b', 'c', 'd', 'e'], 2)` returns ['c', 'd', 'e', 'A', 'b']. 
+ * `rotateArray(['A', 'b', 'c', 'd', 'e'], 1)` returns ['b', 'c', 'd', 'e', 'A'].
+ * `rotateArray(['A', 'b', 'c', 'd', 'e'], 2)` returns ['c', 'd', 'e', 'A', 'b'].
  * `rotateArray(['A', 'b', 'c', 'd', 'e'], -1)` returns ['e', 'A', 'b', 'c', 'd'].
- * 
+ *
  * Rotating by 0 or by a large number is handled efficiently.
  * @param input The array to rotate.  Must contain at least one element.
  * @param by How many items to rotate.  Must be a 32 bit integer.
  * @returns The original array if no changes were requested.  Or a new array with the given changes.
  */
-function rotateArray<T>(input : ReadonlyArray<T>, by : number) {
-  if ((by|0)!= by) {
+function rotateArray<T>(input: ReadonlyArray<T>, by: number) {
+  if ((by | 0) != by) {
     throw new Error(`invalid input: ${by}`);
   }
   by = positiveModulo(by, input.length);
@@ -119,10 +119,9 @@ function rotateArray<T>(input : ReadonlyArray<T>, by : number) {
     return [...input.slice(by), ...input.slice(0, by)];
   }
 }
-//(window as any).rotateArray = rotateArray;
 
 /**
- * 
+ * Rotate a single row.  Like when the user drags a piece left or right.
  * @param input A valid board configuration.
  * @param rowNumber Which row to rotate.
  * @param by How many places left to move each piece.
@@ -132,18 +131,24 @@ function rotateArray<T>(input : ReadonlyArray<T>, by : number) {
  * @returns A board with the requested configuration.
  * This will reuse as many arrays as it can, and will create new arrays as needed.
  */
-function rotateLeft(input : AllPieces, rowNumber : number, by : number) : AllPieces {
+function rotateLeft(
+  input: AllPieces,
+  rowNumber: number,
+  by: number
+): AllPieces {
   const originalRow = input[rowNumber];
   const newRow = rotateArray(originalRow, by);
   if (originalRow == newRow) {
+    // No change.  Return the original.
     return input;
   } else {
-    return input.map((row) => (row == originalRow)?newRow:row);
+    // One row changed.  Reuse the arrays for the other rows.
+    return input.map((row) => (row == originalRow ? newRow : row));
   }
 }
 
 /**
- * 
+ * Rotate a single column.  Like when the user moves a piece up or down.
  * @param input A valid board configuration.
  * @param columnNumber Which column to rotate.
  * @param by How many places left to move each piece.
@@ -153,26 +158,41 @@ function rotateLeft(input : AllPieces, rowNumber : number, by : number) : AllPie
  * @returns A board with the requested configuration.
  * This will reuse as many arrays as it can, and will create new arrays as needed.
  */
-function rotateUp(input : AllPieces, columnNumber : number, by : number) : AllPieces  {
+function rotateUp(
+  input: AllPieces,
+  columnNumber: number,
+  by: number
+): AllPieces {
   const numberOfRows = input.length;
+  // Simplify things by forcing by to be in [0, numberOfRows)
   by = positiveModulo(by, numberOfRows);
   if (by == 0) {
+    // No change.  Return the original.
     return input;
   } else {
     return input.map((row, rowNumber) => {
+      // First, create a copy of the row, so we can modify the copy.
       const result = [...row];
-      result[columnNumber] = input[(rowNumber + by)%numberOfRows][columnNumber];
+      // Then update the item in the column that is rotating.
+      result[columnNumber] =
+        input[(rowNumber + by) % numberOfRows][columnNumber];
       return result;
     });
   }
 }
 
+/**
+ * The first index is the row number.
+ * The second index is the column number.
+ */
 type AllGroupHolders = ReadonlyArray<ReadonlyArray<GroupHolder>>;
 
 /**
  * A lot of the data in this program is readonly.
  * GroupHolder has values that can be modified.
  * This is required internally by the algorithm that finds colors that are touching.
+ * TODO There are too many public functions.
+ * It makes sense to call one public function to do all of the work.
  */
 class GroupHolder {
   #group: Group;
@@ -181,6 +201,7 @@ class GroupHolder {
     readonly column: number,
     readonly piece: Piece
   ) {
+    // Initially we have one group per piece.
     this.#group = new Group(this);
   }
   get color(): Color {
@@ -193,29 +214,93 @@ class GroupHolder {
       )
     );
   }
+  /**
+   * Combine two groups, if they contain the same color pieces.
+   * @param other Another group which is adjacent to `this` group.
+   */
   private tryCombine(other: GroupHolder) {
-    if (this.color == other.color) {
+    if (this.#group != other.#group && this.color == other.color) {
+      /*
+      if (this.color == "green") {
+       (window as any).showGreen();
+       //debugger;
+      }
+      */
+      /**
+       * `this` group will grow to contain each member of the
+       * `other` group.  And the `other` group will be marked as
+       * `!valid` so we don't accidentally try to use it again.
+       *
+       * `allChanged` contains a list of what was originally in
+       * the other group.
+       */
       const allChanged = this.#group.consume(other.#group);
+      // Update the GroupHolder objects.
+      // Everything that was in the `other` group is now in `this` group.
+      // (Each GroupHolder points to its Group, and each Group points to all of its Group objects.)
       allChanged.forEach((changed) => (changed.#group = this.#group));
+      if (!this.#group.valid) {
+        // This was aimed at a specific bug.
+        // I was trying to merge a group with itself, and that was invalidating the group.
+        // That error got caught the next time I tried to use the group.
+        // But by explicitly checking now I could see the problem sooner and I could see the context.
+        (window as any).showGreen();
+        throw new Error("wtf");
+      }
     }
   }
+  /**
+   * Find all pieces that are touching and have the same color.
+   * @param groupHolders  Comes from createAll().
+   * This function modifies this parameter to show which pieces are touching other pieces of the same color.
+   */
   static combineAll(groupHolders: AllGroupHolders) {
+    // showGreen() was aimed at debugging a specific problem.
+    // Among other things, this gives access to groupHolders, which might be hard to track down in the debugger and the logs.
+    (window as any).showGreen = () => {
+      const forTable: {}[] = [];
+      const forLog: Group[] = [];
+      groupHolders.forEach((row) => {
+        row.forEach((groupHolder) => {
+          if (groupHolder.color == "green") {
+            forTable.push(groupHolder.#group.debugInfo());
+            forLog.push(groupHolder.#group);
+          }
+        });
+      });
+      // Notice that the row and column of the debugInfo() is the
+      // original row and column for the Group.  In this context it
+      // might make more sense to show the row and column of each
+      // GroupHolder.
+      console.table(forTable);
+      console.log(forLog);
+    };
     groupHolders.forEach((row, rowNumber) => {
       row.forEach((groupHolder, columnNumber) => {
         if (rowNumber) {
+          // Check the current piece against the piece above it.
           const previousRowNumber = rowNumber - 1;
           const otherGroupHolder =
             groupHolders[previousRowNumber][columnNumber];
           groupHolder.tryCombine(otherGroupHolder);
         }
         if (columnNumber) {
+          // Check the current piece against the piece to its left.
           const previousColumnNumber = columnNumber - 1;
           const otherGroupHolder = row[previousColumnNumber];
           groupHolder.tryCombine(otherGroupHolder);
         }
       });
     });
+    // showGreen() remembers the action in progress.
+    // The action is finished so showGreen() is no longer relevant.
+    delete (window as any).showGreen;
   }
+  /**
+   * Find all pieces that need to be removed from the board.
+   * @param groupHolders Comes from combineAll().
+   * @returns A list of groups with 3 or more Pieces.
+   */
   static findBigGroups(groupHolders: AllGroupHolders) {
     const countByGroup = new Map<Group, number>();
     groupHolders.forEach((row) =>
@@ -240,7 +325,23 @@ class Group {
   get contents(): ReadonlySet<GroupHolder> {
     return this.#contents;
   }
+  static #nextDebugId = 0;
+  #debugId = Group.#nextDebugId++;
+  readonly debugInitialGroup: GroupHolder;
+  /**
+   * This is aimed at console.log() or console.table().
+   * The format is likely to change.
+   */
+  debugInfo() {
+    return {
+      row: this.debugInitialGroup.row,
+      column: this.debugInitialGroup.column,
+      contents: this.valid ? this.#contents.size : "invalid",
+      id: this.#debugId,
+    };
+  }
   constructor(initialContents: GroupHolder) {
+    this.debugInitialGroup = initialContents;
     this.#contents.add(initialContents);
   }
   consume(other: Group) {
@@ -250,6 +351,9 @@ class Group {
     other.#contents = undefined!;
     return result;
   }
+  get valid(): boolean {
+    return !!this.#contents?.has(this.debugInitialGroup);
+  }
 }
 
 function checkGroups() {
@@ -258,39 +362,17 @@ function checkGroups() {
   const groups = GroupHolder.findBigGroups(groupHolders);
   console.log(groups);
 }
-checkGroups();
+
+// Debug stuff.  All of the functions below will automatically be called by the GUI.
+// This allows me to test the functions in isolation,
+// and to test them before the GUI is ready.
 
 (window as any).checkGroups = checkGroups;
 
-(window as any).rotateLeft = (rowNumber : number, by : number) => {
+(window as any).rotateLeft = (rowNumber: number, by: number) => {
   showPieces(rotateLeft(getPieces(), rowNumber, by));
-}
+};
 
-(window as any).rotateUp = (columnNumber : number, by : number) => {
+(window as any).rotateUp = (columnNumber: number, by: number) => {
   showPieces(rotateUp(getPieces(), columnNumber, by));
-}
-
-// Bug:  When I was in the following configuration checkGroups() failed.
-/**
- * green   blue   yellow  blue    violet  violet
- * green   blue   yellow  yellow  orange  red
- * violet  red    green   yellow  yellow  violet
- * red     green  blue    yellow  orange  violet
- * red     green  blue    orange  orange  violet
- * red     green  blue    orange  orange  red
- */
-// It gave me the following output:
-/**
- * (6) [Group, Group, Group, Group, Group, Group]
-0: Group {#contents: Set(6)}
-1: Group {#contents: Set(3)}
-2: Group {#contents: Set(3)}
-3: Group {#contents: Set(3)}
-4: Group {#contents: Set(3)}
-5: Group {#contents: undefined}
-length: 6
-[[Prototype]]: Array(0)
- */
-// On closer inspection the red, green, blue and violet groups are correct.
-// The last group should contain 5 orange cells, but instead I see a group that is in an invalid state.
-// TODO  Fix this bug!
+};
