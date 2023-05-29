@@ -1,13 +1,3 @@
 :root {
   font-size: 300%;
 }
-table {
-  border-collapse: collapse;
-}
-td {
-  border: 0.1em solid black;
-  padding: 0.1em;
-  text-shadow: 0 0 0.05em white, 0 0 0.05em white, 0 0 0.05em white,
-    0 0 0.05em white;
-  /* text-shadow: 1px 1px 3px white, 1px -1px 3px white, -1px -1px 3px white, -1px 1px 3px white; */
-}

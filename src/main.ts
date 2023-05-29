@@ -1,5 +1,5 @@
 import "./style.css";
-import { assertClass, pick, zip } from "phil-lib/misc";
+import { assertClass, initializedArray, pick } from "phil-lib/misc";
 import { getById } from "phil-lib/client-misc";
 
 /**
@@ -27,7 +27,76 @@ function positiveModulo(numerator: number, denominator: number) {
 
 type Color = string;
 
+const colors: Color[] = ["red", "green", "blue", "yellow", "orange", "violet"];
+
 type Piece = { readonly color: Color; readonly weight: number };
+
+class GuiPiece {
+  static #board = getById("board", SVGElement);
+  static #pieceTemplate = getById(
+    "piece",
+    HTMLTemplateElement
+  ).content.querySelector("g")!;
+  #row: number;
+  #column: number;
+  readonly element: SVGGElement;
+  constructor(public readonly piece: Piece, row: number, column: number) {
+    this.#row = row;
+    this.#column = column;
+    const clone = assertClass(
+      GuiPiece.#pieceTemplate.cloneNode(true),
+      SVGGElement
+    );
+    this.element = clone;
+    clone.setAttribute("fill", piece.color);
+    clone.setAttribute("transform", `translate(${column}, ${row})`);
+    GuiPiece.#board.appendChild(clone);
+  }
+  remove() {
+    this.element.remove();
+  }
+}
+
+class GUI {
+  private constructor() {
+    throw new Error("wtf");
+  }
+  static readonly #currentlyVisible = new Set<GuiPiece>();
+  // move this initialization elsewhere.  We need someone outside the gui
+  // to create a new AllPieces array.
+  // = initializedArray(6, (rowNumber) =>
+  //  initializedArray(6, (columnNumber) => {
+  //  const piece = new Pie
+  // })
+  //);
+  static #allPieces: AllPieces = createRandomBoard();
+  static get pieces(): AllPieces {
+    return this.#allPieces;
+  }
+  static set pieces(allPieces: AllPieces) {
+    this.#allPieces = allPieces;
+    this.draw(allPieces);
+    this.hideTemporaries();
+  }
+  private static hideTemporaries(): void {}
+  private static draw(allPieces: AllPieces) {
+    this.resetAll();
+    allPieces.forEach((row, rowNumber) => {
+      row.forEach((piece, columnNumber) => {
+        const guiPiece = new GuiPiece(piece, rowNumber, columnNumber);
+        this.#currentlyVisible.add(guiPiece);
+      });
+    });
+  }
+  private static resetAll() {
+    this.#currentlyVisible.forEach((piece) => {
+      piece.remove();
+    });
+    this.#currentlyVisible.clear();
+    this.hideTemporaries();
+  }
+  static #staticInit: void = this.draw(this.#allPieces);
+}
 
 /**
  * Extract all of the cells from a table and return them in a 2 dimensional array.
@@ -48,50 +117,6 @@ function getTableCells(table: HTMLTableElement) {
  * The first index is the row number, the second is the column number.
  */
 type AllPieces = ReadonlyArray<ReadonlyArray<Piece>>;
-
-/**
- * Read all of the pieces from the GUI.
- *
- * Most of this code does not know or care where this info is stored.
- * And I know the storage will change.
- * Currently the GUI is only good enough for debugging.
- */
-function getPieces(): AllPieces {
-  const mainTable = getById("main", HTMLTableElement);
-  const allCells = getTableCells(mainTable);
-  return allCells.map((row) =>
-    row.map((cell) => {
-      return { color: cell.innerText, weight: 1 };
-    })
-  );
-}
-
-/**
- * Update the GUI with a complete list of pieces and positions.
- *
- * Most of this code does not know or care where this info is stored.
- * And I know the storage will change.
- * Currently the GUI is only good enough for debugging.
- *
- * The GUI will eventually include animations,
- * and that will require more information,
- * so I know this interface will need to change.
- * @param source A valid array of pieces.
- */
-function showPieces(source: AllPieces) {
-  const mainTable = getById("main", HTMLTableElement);
-  const destination = getTableCells(mainTable);
-  for (const [destinationRow, sourceRow] of zip(destination, source)) {
-    for (const [cell, piece] of zip(destinationRow, sourceRow)) {
-      cell.innerText = piece.color;
-      cell.style.backgroundColor = piece.color;
-    }
-  }
-  return Promise.resolve();
-}
-
-// Initialize the colors.
-showPieces(getPieces());
 
 /**
  * This does a non-destructive rotate.
@@ -179,6 +204,14 @@ function rotateUp(
       return result;
     });
   }
+}
+
+function createRandomBoard(): AllPieces {
+  return initializedArray(6, (rowNumber) =>
+    initializedArray(6, (columnNumber): Piece => {
+      return { weight: 1, color: pick(colors) };
+    })
+  );
 }
 
 /**
@@ -357,7 +390,7 @@ class Group {
 }
 
 function checkGroups() {
-  const groupHolders = GroupHolder.createAll(getPieces());
+  const groupHolders = GroupHolder.createAll(GUI.pieces);
   GroupHolder.combineAll(groupHolders);
   const groups = GroupHolder.findBigGroups(groupHolders);
   console.log(groups);
@@ -370,29 +403,9 @@ function checkGroups() {
 (window as any).checkGroups = checkGroups;
 
 (window as any).rotateLeft = (rowNumber: number, by: number) => {
-  showPieces(rotateLeft(getPieces(), rowNumber, by));
+  GUI.pieces = rotateLeft(GUI.pieces, rowNumber, by);
 };
 
 (window as any).rotateUp = (columnNumber: number, by: number) => {
-  showPieces(rotateUp(getPieces(), columnNumber, by));
+  GUI.pieces = rotateUp(GUI.pieces, columnNumber, by);
 };
-
-// SVG board
-
-const board = getById("board", SVGElement);
-const pieceTemplate = getById(
-  "piece",
-  HTMLTemplateElement
-).content.querySelector("g")!;
-function addPiece(color: string, row: number, column: number) {
-  const clone = assertClass(pieceTemplate.cloneNode(true), SVGGElement);
-  clone.setAttribute("fill", color);
-  clone.setAttribute("transform", `translate(${column}, ${row})`);
-  board.appendChild(clone);
-}
-const colors = ["red", "green", "blue", "yellow", "orange", "violet"];
-for (let row = 0; row < 6; row++) {
-  for (let column = 0; column < 6; column++) {
-    addPiece(pick(colors), row, column);
-  }
-}
