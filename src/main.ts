@@ -2,6 +2,13 @@ import "./style.css";
 import { assertClass, initializedArray, pick } from "phil-lib/misc";
 import { getById } from "phil-lib/client-misc";
 
+{
+  let showNext = "☆";
+  setInterval(() => {
+    document.title = `${showNext} Classic Chuzzle`;
+    showNext = (showNext=="☆")?"★":"☆";
+  }, 1000);
+}
 /**
  * This is similar to `numerator % denominator`, i.e. modulo division.
  * The difference is that the result will never be negative.
