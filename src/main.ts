@@ -1,5 +1,5 @@
 import "./style.css";
-import { assertClass, zip } from "phil-lib/misc";
+import { assertClass, pick, zip } from "phil-lib/misc";
 import { getById } from "phil-lib/client-misc";
 
 /**
@@ -376,3 +376,23 @@ function checkGroups() {
 (window as any).rotateUp = (columnNumber: number, by: number) => {
   showPieces(rotateUp(getPieces(), columnNumber, by));
 };
+
+// SVG board
+
+const board = getById("board", SVGElement);
+const pieceTemplate = getById(
+  "piece",
+  HTMLTemplateElement
+).content.querySelector("g")!;
+function addPiece(color: string, row: number, column: number) {
+  const clone = assertClass(pieceTemplate.cloneNode(true), SVGGElement);
+  clone.setAttribute("fill", color);
+  clone.setAttribute("transform", `translate(${column}, ${row})`);
+  board.appendChild(clone);
+}
+const colors = ["red", "green", "blue", "yellow", "orange", "violet"];
+for (let row = 0; row < 6; row++) {
+  for (let column = 0; column < 6; column++) {
+    addPiece(pick(colors), row, column);
+  }
+}
