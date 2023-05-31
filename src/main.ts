@@ -182,21 +182,15 @@ function rotateArray<T>(input: ReadonlyArray<T>, by: number) {
 class LogicalBoard {
   static readonly SIZE = 6;
   private constructor(public readonly allPieces: AllPieces) {}
-  static create(color?: Color): LogicalBoard {
-    if (color !== undefined) {
-      const piece: Piece = { color, weight: 1 };
-      const row = initializedArray(LogicalBoard.SIZE, () => piece);
-      return new LogicalBoard(initializedArray(LogicalBoard.SIZE, () => row));
-    } else {
-      return new LogicalBoard(
-        initializedArray(LogicalBoard.SIZE, () =>
-          initializedArray(LogicalBoard.SIZE, (): Piece => {
-            return { weight: 1, color: pick(colors) };
-          })
-        )
-      );
-    }
+  static createRandom(): LogicalBoard {
+    const pieces = initializedArray(LogicalBoard.SIZE, () =>
+      initializedArray(LogicalBoard.SIZE, (): Piece => {
+        return { weight: 1, color: pick(colors) };
+      })
+    );
+    return new this(pieces);
   }
+  static readonly QUICK = this.createRandom();
 
   /**
    * Rotate a single row.  Like when the user drags a piece left or right.
@@ -259,7 +253,7 @@ class GUI {
     throw new Error("wtf");
   }
   static readonly #currentlyVisible = new Set<GuiPiece>();
-  static #currentBoard: LogicalBoard = LogicalBoard.create();
+  static #currentBoard: LogicalBoard = LogicalBoard.createRandom();
   static get currentBoard(): LogicalBoard {
     return this.#currentBoard;
   }
@@ -298,8 +292,6 @@ type AllGroupHolders = ReadonlyArray<ReadonlyArray<GroupHolder>>;
  * A lot of the data in this program is readonly.
  * GroupHolder has values that can be modified.
  * This is required internally by the algorithm that finds colors that are touching.
- * TODO There are too many public functions.
- * It makes sense to call one public function to do all of the work.
  */
 class GroupHolder {
   #group: Group;
@@ -314,8 +306,8 @@ class GroupHolder {
   get color(): Color {
     return this.piece.color;
   }
-  static createAll(logicalBoard: LogicalBoard): AllGroupHolders {
-    return logicalBoard.allPieces.map((row, rowNumber) =>
+  private static createAll(allPieces : AllPieces): AllGroupHolders {
+    return allPieces.map((row, rowNumber) =>
       row.map(
         (piece, columnNumber) => new GroupHolder(rowNumber, columnNumber, piece)
       )
@@ -361,7 +353,7 @@ class GroupHolder {
    * @param groupHolders  Comes from createAll().
    * This function modifies this parameter to show which pieces are touching other pieces of the same color.
    */
-  static combineAll(groupHolders: AllGroupHolders) {
+  private static combineAll(groupHolders: AllGroupHolders) {
     // showGreen() was aimed at debugging a specific problem.
     // Among other things, this gives access to groupHolders, which might be hard to track down in the debugger and the logs.
     (window as any).showGreen = () => {
@@ -408,7 +400,7 @@ class GroupHolder {
    * @param groupHolders Comes from combineAll().
    * @returns A list of groups with 3 or more Pieces.
    */
-  static findBigGroups(groupHolders: AllGroupHolders) {
+  private static findBigGroups(groupHolders: AllGroupHolders) {
     const countByGroup = new Map<Group, number>();
     groupHolders.forEach((row) =>
       row.forEach((groupHolder) => {
@@ -424,6 +416,11 @@ class GroupHolder {
       }
     }
     return result;
+  }
+  static findActionable(allPieces : AllPieces) : Group[] {
+    const allGroupHolders = this.createAll(allPieces);
+    this.combineAll(allGroupHolders);
+    return this.findBigGroups(allGroupHolders);
   }
 }
 
@@ -464,9 +461,7 @@ class Group {
 }
 
 function checkGroups() {
-  const groupHolders = GroupHolder.createAll(GUI.currentBoard);
-  GroupHolder.combineAll(groupHolders);
-  const groups = GroupHolder.findBigGroups(groupHolders);
+  const groups = GroupHolder.findActionable(GUI.currentBoard.allPieces);
   console.log(groups);
 }
 
