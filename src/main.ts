@@ -179,115 +179,6 @@ function rotateArray<T>(input: ReadonlyArray<T>, by: number) {
   }
 }
 
-class LogicalBoard {
-  static readonly SIZE = 6;
-  private constructor(public readonly allPieces: AllPieces) {}
-  static createRandom(): LogicalBoard {
-    const pieces = initializedArray(LogicalBoard.SIZE, () =>
-      initializedArray(LogicalBoard.SIZE, (): Piece => {
-        return { weight: 1, color: pick(colors) };
-      })
-    );
-    return new this(pieces);
-  }
-  static readonly QUICK = this.createRandom();
-
-  /**
-   * Rotate a single row.  Like when the user drags a piece left or right.
-   * @param rowNumber Which row to rotate.
-   * @param by How many places left to move each piece.
-   * Positive numbers move to the left, and negative numbers move to the right.
-   * Must be a 32 bit integer.
-   * 0 and large values are handled efficiently.
-   * @returns A LogicalBoard with the requested configuration.
-   * This will reuse as many objects as it can, and will create new objects as needed.
-   */
-  rotateLeft(rowNumber: number, by: number): LogicalBoard {
-    const originalRow = this.allPieces[rowNumber];
-    const newRow = rotateArray(originalRow, by);
-    if (originalRow == newRow) {
-      // No change.  Return the original.
-      return this;
-    } else {
-      // One row changed.  Reuse the arrays for the other rows.
-      return new LogicalBoard(
-        this.allPieces.map((row) => (row == originalRow ? newRow : row))
-      );
-    }
-  }
-
-  /**
-   * Rotate a single column.  Like when the user moves a piece up or down.
-   * @param columnNumber Which column to rotate.
-   * @param by How many places up to move each piece.
-   * Positive numbers move up, and negative numbers move down.
-   * Must be a 32 bit integer.
-   * 0 and large values are handled efficiently.
-   * @returns A LogicalBoard with the requested configuration.
-   * This will reuse as many objects as it can, and will create new objects as needed.
-   */
-  rotateUp(columnNumber: number, by: number): LogicalBoard {
-    const numberOfRows = this.allPieces.length;
-    // Simplify things by forcing by to be in [0, numberOfRows)
-    by = positiveModulo(by, numberOfRows);
-    if (by == 0) {
-      // No change.  Return the original.
-      return this;
-    } else {
-      return new LogicalBoard(
-        this.allPieces.map((row, rowNumber) => {
-          // First, create a copy of the row, so we can modify the copy.
-          const result = [...row];
-          // Then update the item in the column that is rotating.
-          result[columnNumber] =
-            this.allPieces[(rowNumber + by) % numberOfRows][columnNumber];
-          return result;
-        })
-      );
-    }
-  }
-}
-
-class GUI {
-  private constructor() {
-    throw new Error("wtf");
-  }
-  static readonly #currentlyVisible = new Set<GuiPiece>();
-  static #currentBoard: LogicalBoard = LogicalBoard.createRandom();
-  static get currentBoard(): LogicalBoard {
-    return this.#currentBoard;
-  }
-  static set currentBoard(newBoard: LogicalBoard) {
-    this.#currentBoard = newBoard;
-    this.draw(newBoard);
-    this.hideTemporaries();
-  }
-  private static hideTemporaries(): void {}
-  private static draw(board: LogicalBoard) {
-    this.resetAll();
-    board.allPieces.forEach((row, rowNumber) => {
-      row.forEach((piece, columnNumber) => {
-        const guiPiece = new GuiPiece(piece, rowNumber, columnNumber);
-        this.#currentlyVisible.add(guiPiece);
-      });
-    });
-  }
-  private static resetAll() {
-    this.#currentlyVisible.forEach((piece) => {
-      piece.remove();
-    });
-    this.#currentlyVisible.clear();
-    this.hideTemporaries();
-  }
-  static #staticInit: void = this.draw(this.#currentBoard);
-}
-
-/**
- * The first index is the row number.
- * The second index is the column number.
- */
-type AllGroupHolders = ReadonlyArray<ReadonlyArray<GroupHolder>>;
-
 /**
  * A lot of the data in this program is readonly.
  * GroupHolder has values that can be modified.
@@ -306,7 +197,7 @@ class GroupHolder {
   get color(): Color {
     return this.piece.color;
   }
-  private static createAll(allPieces : AllPieces): AllGroupHolders {
+  private static createAll(allPieces: AllPieces): AllGroupHolders {
     return allPieces.map((row, rowNumber) =>
       row.map(
         (piece, columnNumber) => new GroupHolder(rowNumber, columnNumber, piece)
@@ -417,7 +308,7 @@ class GroupHolder {
     }
     return result;
   }
-  static findActionable(allPieces : AllPieces) : Group[] {
+  static findActionable(allPieces: AllPieces): Group[] {
     const allGroupHolders = this.createAll(allPieces);
     this.combineAll(allGroupHolders);
     return this.findBigGroups(allGroupHolders);
@@ -459,6 +350,139 @@ class Group {
     return !!this.#contents?.has(this.debugInitialGroup);
   }
 }
+
+class LogicalBoard {
+  static readonly SIZE = 6;
+  private constructor(public readonly allPieces: AllPieces) {}
+  static createRandom(): LogicalBoard {
+    const pieces = initializedArray(LogicalBoard.SIZE, () =>
+      initializedArray(LogicalBoard.SIZE, (): Piece => {
+        return { weight: 1, color: pick(colors) };
+      })
+    );
+    const groups = GroupHolder.findActionable(pieces);
+    groups.forEach((group) => {
+      group.contents.forEach(({ row, column }) => {
+        const nearby = new Set<Color>();
+        [
+          [0, 1],
+          [0, -1],
+          [1, 0],
+          [-1, 0],
+        ].forEach(([rowOffset, columnOffset]) => {
+          const rowArray = pieces[row + rowOffset];
+          if (rowArray) {
+            const piece = rowArray[column + columnOffset];
+            if (piece) {
+              nearby.add(piece.color);
+            }
+          }
+        });
+        pieces[row][column] = {
+          color: pick(colors.filter((color) => !nearby.has(color))),
+          weight: 1,
+        };
+      });
+    });
+    return new this(pieces);
+  }
+  static readonly QUICK = this.createRandom();
+
+  /**
+   * Rotate a single row.  Like when the user drags a piece left or right.
+   * @param rowNumber Which row to rotate.
+   * @param by How many places left to move each piece.
+   * Positive numbers move to the left, and negative numbers move to the right.
+   * Must be a 32 bit integer.
+   * 0 and large values are handled efficiently.
+   * @returns A LogicalBoard with the requested configuration.
+   * This will reuse as many objects as it can, and will create new objects as needed.
+   */
+  rotateLeft(rowNumber: number, by: number): LogicalBoard {
+    const originalRow = this.allPieces[rowNumber];
+    const newRow = rotateArray(originalRow, by);
+    if (originalRow == newRow) {
+      // No change.  Return the original.
+      return this;
+    } else {
+      // One row changed.  Reuse the arrays for the other rows.
+      return new LogicalBoard(
+        this.allPieces.map((row) => (row == originalRow ? newRow : row))
+      );
+    }
+  }
+
+  /**
+   * Rotate a single column.  Like when the user moves a piece up or down.
+   * @param columnNumber Which column to rotate.
+   * @param by How many places up to move each piece.
+   * Positive numbers move up, and negative numbers move down.
+   * Must be a 32 bit integer.
+   * 0 and large values are handled efficiently.
+   * @returns A LogicalBoard with the requested configuration.
+   * This will reuse as many objects as it can, and will create new objects as needed.
+   */
+  rotateUp(columnNumber: number, by: number): LogicalBoard {
+    const numberOfRows = this.allPieces.length;
+    // Simplify things by forcing by to be in [0, numberOfRows)
+    by = positiveModulo(by, numberOfRows);
+    if (by == 0) {
+      // No change.  Return the original.
+      return this;
+    } else {
+      return new LogicalBoard(
+        this.allPieces.map((row, rowNumber) => {
+          // First, create a copy of the row, so we can modify the copy.
+          const result = [...row];
+          // Then update the item in the column that is rotating.
+          result[columnNumber] =
+            this.allPieces[(rowNumber + by) % numberOfRows][columnNumber];
+          return result;
+        })
+      );
+    }
+  }
+}
+
+class GUI {
+  private constructor() {
+    throw new Error("wtf");
+  }
+  static readonly #currentlyVisible = new Set<GuiPiece>();
+  static #currentBoard: LogicalBoard = LogicalBoard.createRandom();
+  static get currentBoard(): LogicalBoard {
+    return this.#currentBoard;
+  }
+  static set currentBoard(newBoard: LogicalBoard) {
+    this.#currentBoard = newBoard;
+    this.draw(newBoard);
+    this.hideTemporaries();
+  }
+  private static hideTemporaries(): void {}
+  private static draw(board: LogicalBoard) {
+    this.resetAll();
+    board.allPieces.forEach((row, rowNumber) => {
+      row.forEach((piece, columnNumber) => {
+        const guiPiece = new GuiPiece(piece, rowNumber, columnNumber);
+        this.#currentlyVisible.add(guiPiece);
+      });
+    });
+  }
+  private static resetAll() {
+    this.#currentlyVisible.forEach((piece) => {
+      piece.remove();
+    });
+    this.#currentlyVisible.clear();
+    this.hideTemporaries();
+  }
+  static #staticInit: void = this.draw(this.#currentBoard);
+}
+
+/**
+ * The first index is the row number.
+ * The second index is the column number.
+ */
+type AllGroupHolders = ReadonlyArray<ReadonlyArray<GroupHolder>>;
 
 function checkGroups() {
   const groups = GroupHolder.findActionable(GUI.currentBoard.allPieces);
