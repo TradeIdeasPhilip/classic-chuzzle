@@ -6,7 +6,7 @@ import { getById } from "phil-lib/client-misc";
   let showNext = "☆";
   setInterval(() => {
     document.title = `${showNext} Classic Chuzzle`;
-    showNext = (showNext=="☆")?"★":"☆";
+    showNext = showNext == "☆" ? "★" : "☆";
   }, 1000);
 }
 /**
@@ -57,52 +57,79 @@ class GuiPiece {
     this.element = clone;
     clone.setAttribute("fill", piece.color);
     clone.setAttribute("transform", `translate(${column}, ${row})`);
+    /**
+     * New Plan:
+     * Only the svg gets listeners, not the individual tiles.
+     * Each time we have an event we look at this.#board.getBoundingClientRect().
+     * And we compare that to pointerEvent.clientX and pointerEvent.clientY.
+     * We can scale the value to see which cell the user clicked on.
+     * And, as the mouse moves we use those same scaled values to see how much to move the cells.
+     * I can call positiveModulo() to make sense of the mouse moving 2 cells to the left vs 4 cells to the right.
+     * Better yet, I can use positiveModulo(currentX - originalX + 0.5 ,6) - 0.5.
+     * That will give me an output in the range -0.5 - 5.5.
+     * I can round to the nearest integer to find which cell we are currently closest to.
+     * And I can keep the precise value and use that to position the squares in fractional positions.
+     *
+     * Have to just change the translate transform to move the pieces.
+     * I was thinking about layering transforms somehow.
+     * But that doesn't work with the modulo logic.
+     * But it's easy to add the current offset to each piece's normal position, then use the formula above to modulo the result back into range.
+     * We definitely need some cleanup routines:
+     * If we end normally or we abort, we will want to restore all items to their original positions.
+     *
+     * If I let go and the row snaps back into place, is that animated?
+     * So far I update things when the mouse moves.
+     * But the snapping back motion would be more of a traditional animation.
+     * SVG has a lot of stuff related to animations, but I've never looked into it yet.
+     *
+     * Maybe we don't need a special cleanup routine.
+     * Instead, we block the GUI from making any changes while the animation is in progress.
+     * I.e. the user lets go of his mouse,
+     * the items start to move back to their original positions,
+     * the user moves his mouse and clicks somewhere else, before the animation is complete,
+     * the GUI ignores that click because it is busy,
+     * if there are any buttons they will be grayed out.
+     */
+    clone.addEventListener("pointerdown", (pointerEvent) => {
+      //clone.setPointerCapture(pointerEvent.pointerId);
+      console.log("pointerdown", {
+        pointerEvent,
+        clone,
+        row,
+        column,
+        guiPiece: this,
+      });
+    });
+    let moveCount = 0;
+    clone.addEventListener("pointermove", (pointerEvent) => {
+      moveCount++;
+      if (moveCount % 20 == 0) {
+        console.log("pointermove", {
+          x: pointerEvent.clientX,
+          y: pointerEvent.clientY,
+          rect: clone.getBoundingClientRect(),
+          pointerEvent,
+          clone,
+          row,
+          column,
+          guiPiece: this,
+        });
+      }
+    });
+    clone.addEventListener("pointerup", (pointerEvent) => {
+      console.log("pointerup", {
+        pointerEvent,
+        clone,
+        row,
+        column,
+        guiPiece: this,
+      });
+    });
     GuiPiece.#board.appendChild(clone);
   }
   remove() {
     this.element.remove();
   }
-}
-
-class GUI {
-  private constructor() {
-    throw new Error("wtf");
-  }
-  static readonly #currentlyVisible = new Set<GuiPiece>();
-  // move this initialization elsewhere.  We need someone outside the gui
-  // to create a new AllPieces array.
-  // = initializedArray(6, (rowNumber) =>
-  //  initializedArray(6, (columnNumber) => {
-  //  const piece = new Pie
-  // })
-  //);
-  static #allPieces: AllPieces = createRandomBoard();
-  static get pieces(): AllPieces {
-    return this.#allPieces;
-  }
-  static set pieces(allPieces: AllPieces) {
-    this.#allPieces = allPieces;
-    this.draw(allPieces);
-    this.hideTemporaries();
-  }
-  private static hideTemporaries(): void {}
-  private static draw(allPieces: AllPieces) {
-    this.resetAll();
-    allPieces.forEach((row, rowNumber) => {
-      row.forEach((piece, columnNumber) => {
-        const guiPiece = new GuiPiece(piece, rowNumber, columnNumber);
-        this.#currentlyVisible.add(guiPiece);
-      });
-    });
-  }
-  private static resetAll() {
-    this.#currentlyVisible.forEach((piece) => {
-      piece.remove();
-    });
-    this.#currentlyVisible.clear();
-    this.hideTemporaries();
-  }
-  static #staticInit: void = this.draw(this.#allPieces);
 }
 
 /**
@@ -152,73 +179,113 @@ function rotateArray<T>(input: ReadonlyArray<T>, by: number) {
   }
 }
 
-/**
- * Rotate a single row.  Like when the user drags a piece left or right.
- * @param input A valid board configuration.
- * @param rowNumber Which row to rotate.
- * @param by How many places left to move each piece.
- * Positive numbers move to the left, and negative numbers move to the right.
- * Must be a 32 bit integer.
- * 0 and large values are handled efficiently.
- * @returns A board with the requested configuration.
- * This will reuse as many arrays as it can, and will create new arrays as needed.
- */
-function rotateLeft(
-  input: AllPieces,
-  rowNumber: number,
-  by: number
-): AllPieces {
-  const originalRow = input[rowNumber];
-  const newRow = rotateArray(originalRow, by);
-  if (originalRow == newRow) {
-    // No change.  Return the original.
-    return input;
-  } else {
-    // One row changed.  Reuse the arrays for the other rows.
-    return input.map((row) => (row == originalRow ? newRow : row));
+class LogicalBoard {
+  static readonly SIZE = 6;
+  private constructor(public readonly allPieces: AllPieces) {}
+  static create(color?: Color): LogicalBoard {
+    if (color !== undefined) {
+      const piece: Piece = { color, weight: 1 };
+      const row = initializedArray(LogicalBoard.SIZE, () => piece);
+      return new LogicalBoard(initializedArray(LogicalBoard.SIZE, () => row));
+    } else {
+      return new LogicalBoard(
+        initializedArray(LogicalBoard.SIZE, () =>
+          initializedArray(LogicalBoard.SIZE, (): Piece => {
+            return { weight: 1, color: pick(colors) };
+          })
+        )
+      );
+    }
+  }
+
+  /**
+   * Rotate a single row.  Like when the user drags a piece left or right.
+   * @param rowNumber Which row to rotate.
+   * @param by How many places left to move each piece.
+   * Positive numbers move to the left, and negative numbers move to the right.
+   * Must be a 32 bit integer.
+   * 0 and large values are handled efficiently.
+   * @returns A LogicalBoard with the requested configuration.
+   * This will reuse as many objects as it can, and will create new objects as needed.
+   */
+  rotateLeft(rowNumber: number, by: number): LogicalBoard {
+    const originalRow = this.allPieces[rowNumber];
+    const newRow = rotateArray(originalRow, by);
+    if (originalRow == newRow) {
+      // No change.  Return the original.
+      return this;
+    } else {
+      // One row changed.  Reuse the arrays for the other rows.
+      return new LogicalBoard(
+        this.allPieces.map((row) => (row == originalRow ? newRow : row))
+      );
+    }
+  }
+
+  /**
+   * Rotate a single column.  Like when the user moves a piece up or down.
+   * @param columnNumber Which column to rotate.
+   * @param by How many places up to move each piece.
+   * Positive numbers move up, and negative numbers move down.
+   * Must be a 32 bit integer.
+   * 0 and large values are handled efficiently.
+   * @returns A LogicalBoard with the requested configuration.
+   * This will reuse as many objects as it can, and will create new objects as needed.
+   */
+  rotateUp(columnNumber: number, by: number): LogicalBoard {
+    const numberOfRows = this.allPieces.length;
+    // Simplify things by forcing by to be in [0, numberOfRows)
+    by = positiveModulo(by, numberOfRows);
+    if (by == 0) {
+      // No change.  Return the original.
+      return this;
+    } else {
+      return new LogicalBoard(
+        this.allPieces.map((row, rowNumber) => {
+          // First, create a copy of the row, so we can modify the copy.
+          const result = [...row];
+          // Then update the item in the column that is rotating.
+          result[columnNumber] =
+            this.allPieces[(rowNumber + by) % numberOfRows][columnNumber];
+          return result;
+        })
+      );
+    }
   }
 }
 
-/**
- * Rotate a single column.  Like when the user moves a piece up or down.
- * @param input A valid board configuration.
- * @param columnNumber Which column to rotate.
- * @param by How many places left to move each piece.
- * Positive numbers move up, and negative numbers move down.
- * Must be a 32 bit integer.
- * 0 and large values are handled efficiently.
- * @returns A board with the requested configuration.
- * This will reuse as many arrays as it can, and will create new arrays as needed.
- */
-function rotateUp(
-  input: AllPieces,
-  columnNumber: number,
-  by: number
-): AllPieces {
-  const numberOfRows = input.length;
-  // Simplify things by forcing by to be in [0, numberOfRows)
-  by = positiveModulo(by, numberOfRows);
-  if (by == 0) {
-    // No change.  Return the original.
-    return input;
-  } else {
-    return input.map((row, rowNumber) => {
-      // First, create a copy of the row, so we can modify the copy.
-      const result = [...row];
-      // Then update the item in the column that is rotating.
-      result[columnNumber] =
-        input[(rowNumber + by) % numberOfRows][columnNumber];
-      return result;
+class GUI {
+  private constructor() {
+    throw new Error("wtf");
+  }
+  static readonly #currentlyVisible = new Set<GuiPiece>();
+  static #currentBoard: LogicalBoard = LogicalBoard.create();
+  static get currentBoard(): LogicalBoard {
+    return this.#currentBoard;
+  }
+  static set currentBoard(newBoard: LogicalBoard) {
+    this.#currentBoard = newBoard;
+    this.draw(newBoard);
+    this.hideTemporaries();
+  }
+  private static hideTemporaries(): void {}
+  private static draw(board: LogicalBoard) {
+    this.resetAll();
+    board.allPieces.forEach((row, rowNumber) => {
+      row.forEach((piece, columnNumber) => {
+        const guiPiece = new GuiPiece(piece, rowNumber, columnNumber);
+        this.#currentlyVisible.add(guiPiece);
+      });
     });
   }
-}
-
-function createRandomBoard(): AllPieces {
-  return initializedArray(6, (rowNumber) =>
-    initializedArray(6, (columnNumber): Piece => {
-      return { weight: 1, color: pick(colors) };
-    })
-  );
+  private static resetAll() {
+    this.#currentlyVisible.forEach((piece) => {
+      piece.remove();
+    });
+    this.#currentlyVisible.clear();
+    this.hideTemporaries();
+  }
+  static #staticInit: void = this.draw(this.#currentBoard);
 }
 
 /**
@@ -247,8 +314,8 @@ class GroupHolder {
   get color(): Color {
     return this.piece.color;
   }
-  static createAll(pieces: AllPieces): AllGroupHolders {
-    return pieces.map((row, rowNumber) =>
+  static createAll(logicalBoard: LogicalBoard): AllGroupHolders {
+    return logicalBoard.allPieces.map((row, rowNumber) =>
       row.map(
         (piece, columnNumber) => new GroupHolder(rowNumber, columnNumber, piece)
       )
@@ -397,7 +464,7 @@ class Group {
 }
 
 function checkGroups() {
-  const groupHolders = GroupHolder.createAll(GUI.pieces);
+  const groupHolders = GroupHolder.createAll(GUI.currentBoard);
   GroupHolder.combineAll(groupHolders);
   const groups = GroupHolder.findBigGroups(groupHolders);
   console.log(groups);
@@ -410,9 +477,9 @@ function checkGroups() {
 (window as any).checkGroups = checkGroups;
 
 (window as any).rotateLeft = (rowNumber: number, by: number) => {
-  GUI.pieces = rotateLeft(GUI.pieces, rowNumber, by);
+  GUI.currentBoard = GUI.currentBoard.rotateLeft(rowNumber, by);
 };
 
 (window as any).rotateUp = (columnNumber: number, by: number) => {
-  GUI.pieces = rotateUp(GUI.pieces, columnNumber, by);
+  GUI.currentBoard = GUI.currentBoard.rotateUp(columnNumber, by);
 };
