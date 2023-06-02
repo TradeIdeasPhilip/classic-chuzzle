@@ -2,3 +2,18 @@ body {
   margin: 0;
   padding: 0;
 }
+.event-fired {
+  animation: event-fired 1.5s;
+}
+
+@keyframes event-fired {
+  0% {
+    color: orange;
+  }
+  90% {
+    color: red;
+  }
+  100% {
+    color: black;
+  }
+}

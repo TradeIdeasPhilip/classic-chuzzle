@@ -559,22 +559,28 @@ function checkGroups() {
     "gotpointercapture",
     "lostpointercapture",
   ] as const;
-  const activeEvents = document.createElement("div");
-  document.body.appendChild(activeEvents);
-  const unusedEvents = document.createElement("div");
-  unusedEvents.style.color="gray";
-  document.body.appendChild(unusedEvents);
+  const allEventsContainer = document.createElement("div");
+  document.body.appendChild(allEventsContainer);
   const svgElement = document.querySelector("svg")!;
-  eventNames.forEach(eventName => {
-    const eventElement = document.createElement("div");
+  eventNames.forEach((eventName) => {
+    let eventElement = document.createElement("div");
     eventElement.innerText = eventName;
-    unusedEvents.appendChild(eventElement);
-    svgElement.addEventListener(eventName, pointerEvent => {
-      const firstTime = eventElement.parentElement == unusedEvents;
+    eventElement.style.color = "lightgrey";
+    allEventsContainer.appendChild(eventElement);
+    let firstTime = false;
+    svgElement.addEventListener(eventName, (pointerEvent) => {
       if (firstTime) {
         console.log(eventName, pointerEvent, eventElement);
+        firstTime = false;
       }
-      activeEvents.insertBefore(eventElement, activeEvents.firstElementChild);
+      eventElement.remove();
+      eventElement = document.createElement("div");
+      eventElement.innerText = eventName;
+      eventElement.classList.add("event-fired");
+      allEventsContainer.insertBefore(
+        eventElement,
+        allEventsContainer.firstElementChild
+      );
     });
-  }); 
+  });
 }
