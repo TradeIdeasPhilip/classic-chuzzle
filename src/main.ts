@@ -459,6 +459,7 @@ class GUI {
       if (dragState == "none") {
         return;
       }
+      pointerEvent.stopPropagation();
       const current = translateCoordinates(pointerEvent);
       if (dragState == "started") {
         const rowDiff = Math.abs(current.row - dragStartRow);
@@ -497,7 +498,7 @@ class GUI {
     });
     board.addEventListener("lostpointercapture", (pointerEvent) => {
       // lostpointercapture will happen with pointer up or pointercancel.
-      // So lostpointercapture is the safer option. 
+      // So lostpointercapture is the safer option.
       if (dragState == "none") {
         return;
       }
