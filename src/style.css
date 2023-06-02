@@ -3,17 +3,15 @@ body {
   padding: 0;
 }
 .event-fired {
-  animation: event-fired 1.5s;
+  animation: event-fired 1.5s linear;
+  position: relative;
 }
 
 @keyframes event-fired {
   0% {
-    color: orange;
-  }
-  90% {
-    color: red;
+    left: 50vmin;
   }
   100% {
-    color: black;
+    left: 0;
   }
 }
