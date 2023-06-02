@@ -446,6 +446,7 @@ class GUI {
     let fixedIndex = -1;
     board.addEventListener("pointerdown", (pointerEvent) => {
       if (dragState == "none") {
+        pointerEvent.stopPropagation();
         dragState = "started";
         board.setPointerCapture(pointerEvent.pointerId);
         const initial = translateCoordinates(pointerEvent);
@@ -494,7 +495,9 @@ class GUI {
         });
       }
     });
-    board.addEventListener("pointerup", (pointerEvent) => {
+    board.addEventListener("lostpointercapture", (pointerEvent) => {
+      // lostpointercapture will happen with pointer up or pointercancel.
+      // So lostpointercapture is the safer option. 
       if (dragState == "none") {
         return;
       }
@@ -514,9 +517,6 @@ class GUI {
       }
       dragState = "none";
       board.style.cursor = "";
-
-      // Is this everything?  I think there's a pointercancel event.
-      console.log("pointerup", translateCoordinates(pointerEvent));
     });
   })();
 }
