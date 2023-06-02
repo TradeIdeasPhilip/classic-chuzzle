@@ -15,3 +15,18 @@ body {
     left: 0;
   }
 }
+
+div.cell-phone-warning {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  div.cell-phone-warning {
+    display: block;
+    color: white;
+    background-color: red;
+    margin: 0.25em;
+    padding: 0.25em;
+    text-align: center;
+  }
+}
