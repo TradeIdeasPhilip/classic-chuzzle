@@ -545,3 +545,36 @@ function checkGroups() {
 (window as any).rotateUp = (columnNumber: number, by: number) => {
   GUI.currentBoard = GUI.currentBoard.rotateUp(columnNumber, by);
 };
+
+{
+  const eventNames = [
+    "pointerover",
+    "pointerenter",
+    "pointerdown",
+    "pointermove",
+    "pointerup",
+    "pointercancel",
+    "pointerout",
+    "pointerleave",
+    "gotpointercapture",
+    "lostpointercapture",
+  ] as const;
+  const activeEvents = document.createElement("div");
+  document.body.appendChild(activeEvents);
+  const unusedEvents = document.createElement("div");
+  unusedEvents.style.color="gray";
+  document.body.appendChild(unusedEvents);
+  const svgElement = document.querySelector("svg")!;
+  eventNames.forEach(eventName => {
+    const eventElement = document.createElement("div");
+    eventElement.innerText = eventName;
+    unusedEvents.appendChild(eventElement);
+    svgElement.addEventListener(eventName, pointerEvent => {
+      const firstTime = eventElement.parentElement == unusedEvents;
+      if (firstTime) {
+        console.log(eventName, pointerEvent, eventElement);
+      }
+      activeEvents.insertBefore(eventElement, activeEvents.firstElementChild);
+    });
+  }); 
+}
