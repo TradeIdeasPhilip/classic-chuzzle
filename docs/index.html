@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>★ Classic Chuzzle</title>
+    
+    <script type="module" crossorigin src="./assets/main-6a5775d6.js"></script>
+    <link rel="stylesheet" href="./assets/index-a78a3573.css">
+  </head>
+  <body>
+    <svg
+      id="board"
+      style="
+        height: 400px;
+        width: 400px;
+        background-color: antiquewhite;
+        overflow: visible;
+      "
+      viewBox="0 0 6 6"
+      xmlns="http://www.w3.org/2000/svg"
+      stroke-width="0.1"
+    ></svg>
+    <template id="piece">
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <g fill="blue">
+          <rect width="1" height="1"></rect>
+          <path d="M 0,0 v 1 l 0.2,-0.2 v -0.6 Z" fill="rgb(200 200 200 / 25%)">
+            <!-- left -->
+          </path>
+          <path d="M 0,0 h 1 l -0.2,0.2 h -0.6 Z" fill="rgb(255 200 200 / 15%)">
+            <!-- top -->
+          </path>
+          <path d="M 1,0 v 1 l -0.2,-0.2 v -0.6 Z" fill="rgb(0 0 0 / 25%)">
+            <!-- right -->
+          </path>
+          <path d="M 0,1 h 1 l -0.2,-0.2 h -0.6 Z" fill="rgb(0 0 0 / 15%)">
+            <!-- bottom -->
+          </path>
+        </g>
+      </svg>
+    </template>
+  </body>
+</html>

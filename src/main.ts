@@ -395,6 +395,7 @@ class LogicalBoard {
 
 class GUI {
   private constructor() {
+    GUI.#staticInit;
     throw new Error("wtf");
   }
   static #currentlyVisible: GuiPiece[][] = [];
