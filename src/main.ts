@@ -1,5 +1,5 @@
 import "./style.css";
-import { assertClass, initializedArray, pick } from "phil-lib/misc";
+import { assertClass, initializedArray, makeLinear, pick } from "phil-lib/misc";
 import { getById } from "phil-lib/client-misc";
 
 {
@@ -44,19 +44,18 @@ class GuiPiece {
     "piece",
     HTMLTemplateElement
   ).content.querySelector("g")!;
-  #row: number;
-  #column: number;
   readonly element: SVGGElement;
-  constructor(public readonly piece: Piece, row: number, column: number) {
-    this.#row = row;
-    this.#column = column;
+
+  setPosition(row: number, column: number) {
+    this.element.setAttribute("transform", `translate(${column}, ${row})`);
+  }
+  constructor(public readonly piece: Piece) {
     const clone = assertClass(
       GuiPiece.#pieceTemplate.cloneNode(true),
       SVGGElement
     );
     this.element = clone;
     clone.setAttribute("fill", piece.color);
-    clone.setAttribute("transform", `translate(${column}, ${row})`);
     /**
      * New Plan:
      * Only the svg gets listeners, not the individual tiles.
@@ -90,61 +89,11 @@ class GuiPiece {
      * the GUI ignores that click because it is busy,
      * if there are any buttons they will be grayed out.
      */
-    clone.addEventListener("pointerdown", (pointerEvent) => {
-      //clone.setPointerCapture(pointerEvent.pointerId);
-      console.log("pointerdown", {
-        pointerEvent,
-        clone,
-        row,
-        column,
-        guiPiece: this,
-      });
-    });
-    let moveCount = 0;
-    clone.addEventListener("pointermove", (pointerEvent) => {
-      moveCount++;
-      if (moveCount % 20 == 0) {
-        console.log("pointermove", {
-          x: pointerEvent.clientX,
-          y: pointerEvent.clientY,
-          rect: clone.getBoundingClientRect(),
-          pointerEvent,
-          clone,
-          row,
-          column,
-          guiPiece: this,
-        });
-      }
-    });
-    clone.addEventListener("pointerup", (pointerEvent) => {
-      console.log("pointerup", {
-        pointerEvent,
-        clone,
-        row,
-        column,
-        guiPiece: this,
-      });
-    });
     GuiPiece.#board.appendChild(clone);
   }
   remove() {
     this.element.remove();
   }
-}
-
-/**
- * Extract all of the cells from a table and return them in a 2 dimensional array.
- * @param table Read from here
- * @returns An array of arrays of `<td>` and/or `<th>` values.
- * The first index is the row number and the second is the column number.
- */
-function getTableCells(table: HTMLTableElement) {
-  const rows = Array.from(table.querySelectorAll("tr"));
-  return rows.map((row) =>
-    Array.from(row.children).map((cell) =>
-      assertClass(cell, HTMLTableCellElement)
-    )
-  );
 }
 
 /**
@@ -448,7 +397,7 @@ class GUI {
   private constructor() {
     throw new Error("wtf");
   }
-  static readonly #currentlyVisible = new Set<GuiPiece>();
+  static #currentlyVisible: GuiPiece[][] = [];
   static #currentBoard: LogicalBoard = LogicalBoard.createRandom();
   static get currentBoard(): LogicalBoard {
     return this.#currentBoard;
@@ -461,21 +410,114 @@ class GUI {
   private static hideTemporaries(): void {}
   private static draw(board: LogicalBoard) {
     this.resetAll();
-    board.allPieces.forEach((row, rowNumber) => {
-      row.forEach((piece, columnNumber) => {
-        const guiPiece = new GuiPiece(piece, rowNumber, columnNumber);
-        this.#currentlyVisible.add(guiPiece);
+    this.#currentlyVisible = board.allPieces.map((row, rowNumber) => {
+      return row.map((piece, columnNumber) => {
+        const guiPiece = new GuiPiece(piece);
+        guiPiece.setPosition(rowNumber, columnNumber);
+        return guiPiece;
       });
     });
   }
   private static resetAll() {
-    this.#currentlyVisible.forEach((piece) => {
-      piece.remove();
+    this.#currentlyVisible.forEach((row) => {
+      row.forEach((piece) => {
+        piece.remove();
+      });
     });
-    this.#currentlyVisible.clear();
+    this.#currentlyVisible = [];
     this.hideTemporaries();
   }
-  static #staticInit: void = this.draw(this.#currentBoard);
+  static #staticInit: void = (() => {
+    this.draw(this.#currentBoard);
+    const board = getById("board", SVGElement);
+    function translateCoordinates(pointerEvent: PointerEvent) {
+      const rect = board.getBoundingClientRect();
+      const yToRow = makeLinear(rect.top, 0, rect.bottom, LogicalBoard.SIZE);
+      const xToColumn = makeLinear(rect.left, 0, rect.right, LogicalBoard.SIZE);
+      return {
+        row: yToRow(pointerEvent.clientY),
+        column: xToColumn(pointerEvent.clientX),
+      };
+    }
+    let dragState: "none" | "started" | "horizontal" | "vertical" = "none";
+    let dragStartRow = -1;
+    let dragStartColumn = -1;
+    let fixedIndex = -1;
+    board.addEventListener("pointerdown", (pointerEvent) => {
+      if (dragState == "none") {
+        dragState = "started";
+        board.setPointerCapture(pointerEvent.pointerId);
+        const initial = translateCoordinates(pointerEvent);
+        dragStartRow = initial.row;
+        dragStartColumn = initial.column;
+        board.style.cursor = "move";
+      }
+    });
+    board.addEventListener("pointermove", (pointerEvent) => {
+      if (dragState == "none") {
+        return;
+      }
+      const current = translateCoordinates(pointerEvent);
+      if (dragState == "started") {
+        const rowDiff = Math.abs(current.row - dragStartRow);
+        const columnDiff = Math.abs(current.column - dragStartColumn);
+        if (Math.max(rowDiff, columnDiff) < 0.05) {
+          return;
+        } else if (rowDiff > columnDiff) {
+          dragState = "vertical";
+          board.style.cursor = "ns-resize";
+          fixedIndex = Math.floor(dragStartColumn);
+        } else if (columnDiff > rowDiff) {
+          dragState = "horizontal";
+          board.style.cursor = "ew-resize";
+          fixedIndex = Math.floor(dragStartRow);
+        } else {
+          return;
+        }
+        fixedIndex = Math.max(0, Math.min(LogicalBoard.SIZE, fixedIndex));
+      }
+      const wrap = (change: number) => {
+        return positiveModulo(change + 0.5, LogicalBoard.SIZE) - 0.5;
+      };
+      if (dragState == "horizontal") {
+        const moveLeft = dragStartColumn - current.column;
+        const row = this.#currentlyVisible[fixedIndex];
+        row.forEach((guiPiece, columnIndex) => {
+          guiPiece.setPosition(fixedIndex, wrap(columnIndex - moveLeft));
+        });
+      } else if (dragState == "vertical") {
+        const moveUp = dragStartRow - current.row;
+        this.#currentlyVisible.forEach((row, rowIndex) => {
+          const guiPiece = row[fixedIndex];
+          guiPiece.setPosition(wrap(rowIndex - moveUp), fixedIndex);
+        });
+      }
+    });
+    board.addEventListener("pointerup", (pointerEvent) => {
+      if (dragState == "none") {
+        return;
+      }
+      const current = translateCoordinates(pointerEvent);
+      if (dragState == "horizontal") {
+        this.currentBoard = this.currentBoard.rotateLeft(
+          fixedIndex,
+          Math.round(dragStartColumn - current.column)
+        );
+      } else if (dragState == "vertical") {
+        this.currentBoard = this.currentBoard.rotateUp(
+          fixedIndex,
+          Math.round(dragStartRow - current.row)
+        );
+      } else if (dragState == "started") {
+        this.draw(this.currentBoard);
+      }
+      dragState = "none";
+      board.style.cursor = "";
+
+      // Is this everything?  I think there's a pointercancel event.
+      console.log("pointerup", translateCoordinates(pointerEvent));
+    });
+  })();
 }
 
 /**
