@@ -1,1 +1,0 @@
-body{margin:0;padding:0}.event-fired{animation:event-fired 1.5s linear;position:relative}@keyframes event-fired{0%{left:50vmin}to{left:0}}div.cell-phone-warning{display:none}@media (pointer: coarse){div.cell-phone-warning{display:block;color:#fff;background-color:red;margin:.25em;padding:.25em;text-align:center}}

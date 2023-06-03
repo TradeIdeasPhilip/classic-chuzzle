@@ -30,3 +30,12 @@ div.cell-phone-warning {
     text-align: center;
   }
 }
+
+.crystal-decoration {
+  font-size: 0.6px;
+  fill: cyan;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+  user-select: none;
+}

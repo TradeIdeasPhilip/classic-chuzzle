@@ -284,7 +284,9 @@ class Group {
       id: this.#debugId,
     };
   }
+  readonly color: Color;
   constructor(initialContents: GroupHolder) {
+    this.color = initialContents.color;
     this.debugInitialGroup = initialContents;
     this.#contents.add(initialContents);
   }
@@ -405,19 +407,139 @@ class GUI {
   }
   static set currentBoard(newBoard: LogicalBoard) {
     this.#currentBoard = newBoard;
-    this.draw(newBoard);
+    this.draw();
     this.hideTemporaries();
   }
   private static hideTemporaries(): void {}
-  private static draw(board: LogicalBoard) {
-    this.resetAll();
-    this.#currentlyVisible = board.allPieces.map((row, rowNumber) => {
-      return row.map((piece, columnNumber) => {
-        const guiPiece = new GuiPiece(piece);
-        guiPiece.setPosition(rowNumber, columnNumber);
-        return guiPiece;
+  static readonly #backgroundColors: ReadonlyMap<
+    string,
+    ReadonlyArray<string>
+  > = new Map([
+    [
+      "orange",
+      [
+        "cyan",
+        "brown",
+        "white",
+        "darkviolet",
+        "lightyellow",
+        "darkgreen",
+        "darkolivegreen",
+        "darkred",
+      ],
+    ],
+    [
+      "yellow",
+      [
+        "brown",
+        "darkviolet",
+        "lightcoral",
+        "lightsalmon",
+        "lightseagreen",
+        "darkblue",
+        "darkcyan",
+        "darkgoldenrod",
+        "darkgreen",
+        "darkkhaki",
+        "darkolivegreen",
+        "darkorange",
+        "darkred",
+        "darksalmon",
+        "darkseagreen",
+      ],
+    ],
+    [
+      "violet",
+      ["cyan", "brown", "white", "darkviolet", "lightgreen", "darkblue"],
+    ],
+    [
+      "blue",
+      [
+        "cyan",
+        "white",
+        "lightcoral",
+        "lightgreen",
+        "lightgray",
+        "lightsalmon",
+        "lightseagreen",
+        "lightseagreen",
+        "lightskyblue",
+        "lightslategray",
+        "darkorange",
+        "darkseagreen",
+        "darkturquoise",
+      ],
+    ],
+    [
+      "red",
+      [
+        "cyan",
+        "white",
+        "lightcoral",
+        "lightgreen",
+        "lightsalmon",
+        "darkkhaki",
+        "darkseagreen",
+        "chartreuse",
+      ],
+    ],
+    [
+      "green",
+      [
+        "cyan",
+        "white",
+        "lightcoral",
+        "lightcyan",
+        "lightgreen",
+        "lightyellow",
+        "darkred",
+        "darkseagreen",
+        "chartreuse",
+      ],
+    ],
+  ]);
+  static readonly #decorations: ReadonlyArray<string> = [
+    "ʻ",
+    "☆",
+    "𝛿",
+    "∞",
+    "•",
+    "★",
+    "†",
+    "‡",
+    "¿",
+    "*",
+    "◦",
+    "§",
+    "_",
+  ];
+  private static showGroups() {
+    const groups = GroupHolder.findActionable(this.#currentBoard.allPieces);
+    groups.forEach((group) => {
+      const decorationColor = pick(this.#backgroundColors.get(group.color)!);
+      const decorationText = pick(this.#decorations);
+      group.contents.forEach((groupHolder) => {
+        const { row, column } = groupHolder;
+        const gElement = this.#currentlyVisible[row][column].element;
+        const textElement = gElement.querySelector("text")!;
+        textElement.textContent = decorationText;
+        textElement.style.fill = decorationColor;
       });
     });
+  }
+  //private static removeGroups() {}
+  private static draw() {
+    this.resetAll();
+    this.#currentlyVisible = this.#currentBoard.allPieces.map(
+      (row, rowNumber) => {
+        return row.map((piece, columnNumber) => {
+          const guiPiece = new GuiPiece(piece);
+          guiPiece.setPosition(rowNumber, columnNumber);
+          return guiPiece;
+        });
+      }
+    );
+    this.showGroups();
   }
   private static resetAll() {
     this.#currentlyVisible.forEach((row) => {
@@ -429,7 +551,7 @@ class GUI {
     this.hideTemporaries();
   }
   static #staticInit: void = (() => {
-    this.draw(this.#currentBoard);
+    this.draw();
     const board = getById("board", SVGElement);
     function translateCoordinates(pointerEvent: PointerEvent) {
       const rect = board.getBoundingClientRect();
@@ -514,7 +636,7 @@ class GUI {
           Math.round(dragStartRow - current.row)
         );
       } else if (dragState == "started") {
-        this.draw(this.currentBoard);
+        this.draw();
       }
       dragState = "none";
       board.style.cursor = "";
