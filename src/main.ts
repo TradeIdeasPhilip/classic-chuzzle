@@ -504,28 +504,64 @@ class GUI {
     "𝛿",
     "∞",
     "•",
-    "★",
+    "⭑",
     "†",
     "‡",
-    "¿",
+    "؟",
     "*",
     "◦",
     "§",
     "_",
+    "ɝ",
+    "Ԕ",
+    "⟳",
+    "⚐",
+    "🜚",
+    "愛",
+    "❝",
+    "ℵ",
+    "を",
+    "ᇸ",
+    "ڰ",
+    "ॾ",
+    "ৼ",
+    "ན",
+    "ᛧ",
+    "ß",
+    "⧕",
+    "↯",
+    "➷",
+    "⅋",
+    "☙",
+    "„",
+    "⌥",
+    "⧷",
+    "⁎",
+    "╕",
+    "₰",
+    "…",
+    "⑈",
+    "۽",
+    "ₜ",
   ];
   private static showGroups() {
     const groups = GroupHolder.findActionable(this.#currentBoard.allPieces);
-    groups.forEach((group) => {
-      const decorationColor = pick(this.#backgroundColors.get(group.color)!);
-      const decorationText = pick(this.#decorations);
-      group.contents.forEach((groupHolder) => {
-        const { row, column } = groupHolder;
-        const gElement = this.#currentlyVisible[row][column].element;
-        const textElement = gElement.querySelector("text")!;
-        textElement.textContent = decorationText;
-        textElement.style.fill = decorationColor;
+    if (groups.length > 0) {
+      const decorations = [...this.#decorations];
+      groups.forEach((group) => {
+        const decorationColor = pick(this.#backgroundColors.get(group.color)!);
+        const decorationIndex = Math.floor(Math.random() * decorations.length);
+        const decorationText = decorations[decorationIndex];
+        decorations.splice(decorationIndex, 1);
+        group.contents.forEach((groupHolder) => {
+          const { row, column } = groupHolder;
+          const gElement = this.#currentlyVisible[row][column].element;
+          const textElement = gElement.querySelector("text")!;
+          textElement.textContent = decorationText;
+          textElement.style.fill = decorationColor;
+        });
       });
-    });
+    }
   }
   //private static removeGroups() {}
   private static draw() {
