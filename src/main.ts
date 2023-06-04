@@ -32,13 +32,44 @@ function positiveModulo(numerator: number, denominator: number) {
   }
 }
 
-type Color = string;
+// The background colors for the pieces.
+type Color = "red" | "green" | "blue" | "yellow" | "orange" | "violet";
 
-const colors: Color[] = ["red", "green", "blue", "yellow", "orange", "violet"];
+/**
+ * Each legal color listed once.
+ */
+const colors: readonly Color[] = [
+  "red",
+  "green",
+  "blue",
+  "yellow",
+  "orange",
+  "violet",
+];
 
-type Piece = { readonly color: Color; readonly weight: number };
+/**
+ * What is in each cell.
+ */
+type Piece = { readonly color: Color; 
+  /**
+   * A placeholder.  Eventually I need to deal with 2⨉2 pieces.
+   */
+  readonly weight: number };
 
+  /**
+   * One of these for each piece on the board.
+   * These objects own the DOM Element objects.
+   * 
+   * These are semi-disposable.
+   * Sometimes it's nice to animate these as they move.
+   * But sometimes it's easier to throw the old ones away and start fresh.
+   * 
+   * I separated GuiPiece from Piece in case the GUI changed.
+   */
 class GuiPiece {
+  /**
+   * The GuiPiece elements will go on this #board.
+   */
   static #board = getById("board", SVGElement);
   static #pieceTemplate = getById(
     "piece",
@@ -46,6 +77,11 @@ class GuiPiece {
   ).content.querySelector("g")!;
   readonly element: SVGGElement;
 
+  /**
+   * Move the piece to the given position.
+   * @param row 0 for the first row, 1 for the second.  Fractions and negative values work.
+   * @param column  0 for the first row, 1 for the second.  Fractions and negative values work.
+   */
   setPosition(row: number, column: number) {
     this.element.setAttribute("transform", `translate(${column}, ${row})`);
   }
@@ -56,41 +92,11 @@ class GuiPiece {
     );
     this.element = clone;
     clone.setAttribute("fill", piece.color);
-    /**
-     * New Plan:
-     * Only the svg gets listeners, not the individual tiles.
-     * Each time we have an event we look at this.#board.getBoundingClientRect().
-     * And we compare that to pointerEvent.clientX and pointerEvent.clientY.
-     * We can scale the value to see which cell the user clicked on.
-     * And, as the mouse moves we use those same scaled values to see how much to move the cells.
-     * I can call positiveModulo() to make sense of the mouse moving 2 cells to the left vs 4 cells to the right.
-     * Better yet, I can use positiveModulo(currentX - originalX + 0.5 ,6) - 0.5.
-     * That will give me an output in the range -0.5 - 5.5.
-     * I can round to the nearest integer to find which cell we are currently closest to.
-     * And I can keep the precise value and use that to position the squares in fractional positions.
-     *
-     * Have to just change the translate transform to move the pieces.
-     * I was thinking about layering transforms somehow.
-     * But that doesn't work with the modulo logic.
-     * But it's easy to add the current offset to each piece's normal position, then use the formula above to modulo the result back into range.
-     * We definitely need some cleanup routines:
-     * If we end normally or we abort, we will want to restore all items to their original positions.
-     *
-     * If I let go and the row snaps back into place, is that animated?
-     * So far I update things when the mouse moves.
-     * But the snapping back motion would be more of a traditional animation.
-     * SVG has a lot of stuff related to animations, but I've never looked into it yet.
-     *
-     * Maybe we don't need a special cleanup routine.
-     * Instead, we block the GUI from making any changes while the animation is in progress.
-     * I.e. the user lets go of his mouse,
-     * the items start to move back to their original positions,
-     * the user moves his mouse and clicks somewhere else, before the animation is complete,
-     * the GUI ignores that click because it is busy,
-     * if there are any buttons they will be grayed out.
-     */
     GuiPiece.#board.appendChild(clone);
   }
+  /**
+   * Remove this object from the GUI.
+   */
   remove() {
     this.element.remove();
   }
@@ -132,8 +138,14 @@ function rotateArray<T>(input: ReadonlyArray<T>, by: number) {
  * A lot of the data in this program is readonly.
  * GroupHolder has values that can be modified.
  * This is required internally by the algorithm that finds colors that are touching.
+ *
+ * There is exactly one GroupHolder per cell.
  */
 class GroupHolder {
+  /**
+   * The group currently associated with this cell.
+   * This can change frequently.
+   */
   #group: Group;
   private constructor(
     readonly row: number,
@@ -146,6 +158,13 @@ class GroupHolder {
   get color(): Color {
     return this.piece.color;
   }
+  /**
+   * Show an entire board full of new pieces.
+   * 
+   * This will replace the old GUI with the new GUI all at once, with no animations.
+   * @param allPieces What we want to show.
+   * @returns The GUI that we are using to show it.
+   */
   private static createAll(allPieces: AllPieces): AllGroupHolders {
     return allPieces.map((row, rowNumber) =>
       row.map(
@@ -159,12 +178,6 @@ class GroupHolder {
    */
   private tryCombine(other: GroupHolder) {
     if (this.#group != other.#group && this.color == other.color) {
-      /*
-      if (this.color == "green") {
-       (window as any).showGreen();
-       //debugger;
-      }
-      */
       /**
        * `this` group will grow to contain each member of the
        * `other` group.  And the `other` group will be marked as
@@ -179,11 +192,6 @@ class GroupHolder {
       // (Each GroupHolder points to its Group, and each Group points to all of its Group objects.)
       allChanged.forEach((changed) => (changed.#group = this.#group));
       if (!this.#group.valid) {
-        // This was aimed at a specific bug.
-        // I was trying to merge a group with itself, and that was invalidating the group.
-        // That error got caught the next time I tried to use the group.
-        // But by explicitly checking now I could see the problem sooner and I could see the context.
-        (window as any).showGreen();
         throw new Error("wtf");
       }
     }
@@ -194,26 +202,6 @@ class GroupHolder {
    * This function modifies this parameter to show which pieces are touching other pieces of the same color.
    */
   private static combineAll(groupHolders: AllGroupHolders) {
-    // showGreen() was aimed at debugging a specific problem.
-    // Among other things, this gives access to groupHolders, which might be hard to track down in the debugger and the logs.
-    (window as any).showGreen = () => {
-      const forTable: {}[] = [];
-      const forLog: Group[] = [];
-      groupHolders.forEach((row) => {
-        row.forEach((groupHolder) => {
-          if (groupHolder.color == "green") {
-            forTable.push(groupHolder.#group.debugInfo());
-            forLog.push(groupHolder.#group);
-          }
-        });
-      });
-      // Notice that the row and column of the debugInfo() is the
-      // original row and column for the Group.  In this context it
-      // might make more sense to show the row and column of each
-      // GroupHolder.
-      console.table(forTable);
-      console.log(forLog);
-    };
     groupHolders.forEach((row, rowNumber) => {
       row.forEach((groupHolder, columnNumber) => {
         if (rowNumber) {
@@ -231,9 +219,6 @@ class GroupHolder {
         }
       });
     });
-    // showGreen() remembers the action in progress.
-    // The action is finished so showGreen() is no longer relevant.
-    delete (window as any).showGreen;
   }
   /**
    * Find all pieces that need to be removed from the board.
@@ -257,6 +242,11 @@ class GroupHolder {
     }
     return result;
   }
+  /**
+   * 
+   * @param allPieces The current state of the board.
+   * @returns A list of all groups of pieces which can be removed.
+   */
   static findActionable(allPieces: AllPieces): Group[] {
     const allGroupHolders = this.createAll(allPieces);
     this.combineAll(allGroupHolders);
@@ -264,6 +254,9 @@ class GroupHolder {
   }
 }
 
+/**
+ * A list of pieces that are all the same color and adjacent.
+ */
 class Group {
   #contents = new Set<GroupHolder>();
   get contents(): ReadonlySet<GroupHolder> {
@@ -290,6 +283,11 @@ class Group {
     this.debugInitialGroup = initialContents;
     this.#contents.add(initialContents);
   }
+  /**
+   * Move items from the other Group to this Group.
+   * @param other The Group to be consumed.  Other will be unusable after this.
+   * @returns The items that were in the other Group.
+   */
   consume(other: Group) {
     const contents = this.#contents;
     const result = other.#contents;
@@ -302,16 +300,22 @@ class Group {
   }
 }
 
+/**
+ * An entire board, with no GUI.
+ */
 class LogicalBoard {
   static readonly SIZE = 6;
   private constructor(public readonly allPieces: AllPieces) {}
   static createRandom(): LogicalBoard {
+    // Start with completely random pieces.
     const pieces = initializedArray(LogicalBoard.SIZE, () =>
       initializedArray(LogicalBoard.SIZE, (): Piece => {
         return { weight: 1, color: pick(colors) };
       })
     );
+    // See if there are any groups that could immediately go away.
     const groups = GroupHolder.findActionable(pieces);
+    // Break up the groups, so nothing will happen until the user makes his first move.
     groups.forEach((group) => {
       group.contents.forEach(({ row, column }) => {
         const nearby = new Set<Color>();
@@ -337,7 +341,6 @@ class LogicalBoard {
     });
     return new this(pieces);
   }
-  static readonly QUICK = this.createRandom();
 
   /**
    * Rotate a single row.  Like when the user drags a piece left or right.
@@ -543,6 +546,11 @@ class GUI {
     "⑈",
     "۽",
     "ₜ",
+    "ಠ",
+    "෴",
+    "ጃ",
+    "ᔱ",
+    "ᔰ",
   ];
   private static showGroups() {
     const groups = GroupHolder.findActionable(this.#currentBoard.allPieces);
