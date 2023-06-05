@@ -50,22 +50,24 @@ const colors: readonly Color[] = [
 /**
  * What is in each cell.
  */
-type Piece = { readonly color: Color; 
+type Piece = {
+  readonly color: Color;
   /**
    * A placeholder.  Eventually I need to deal with 2⨉2 pieces.
    */
-  readonly weight: number };
+  readonly weight: number;
+};
 
-  /**
-   * One of these for each piece on the board.
-   * These objects own the DOM Element objects.
-   * 
-   * These are semi-disposable.
-   * Sometimes it's nice to animate these as they move.
-   * But sometimes it's easier to throw the old ones away and start fresh.
-   * 
-   * I separated GuiPiece from Piece in case the GUI changed.
-   */
+/**
+ * One of these for each piece on the board.
+ * These objects own the DOM Element objects.
+ *
+ * These are semi-disposable.
+ * Sometimes it's nice to animate these as they move.
+ * But sometimes it's easier to throw the old ones away and start fresh.
+ *
+ * I separated GuiPiece from Piece in case the GUI changed.
+ */
 class GuiPiece {
   /**
    * The GuiPiece elements will go on this #board.
@@ -85,7 +87,9 @@ class GuiPiece {
   setPosition(row: number, column: number) {
     this.element.setAttribute("transform", `translate(${column}, ${row})`);
   }
+  static readonly #BACK_LINK = Symbol("GuiPiece");
   constructor(public readonly piece: Piece) {
+    (piece as any)[GuiPiece.#BACK_LINK] = this;
     const clone = assertClass(
       GuiPiece.#pieceTemplate.cloneNode(true),
       SVGGElement
@@ -93,6 +97,21 @@ class GuiPiece {
     this.element = clone;
     clone.setAttribute("fill", piece.color);
     GuiPiece.#board.appendChild(clone);
+  }
+  static for(piece: Piece): GuiPiece {
+    // The following doesn't work because of TypeScript.
+    // I think it's complaining because assertClass requires a constructor
+    // with 0 arguments, but GuiPiece does not have such a constructor.
+    //return assertClass((piece as any)[this.#BACK_LINK], GuiPiece)
+    const result = (piece as any)[this.#BACK_LINK];
+    if (!(result instanceof GuiPiece)) {
+      console.error(result);
+      throw new Error("wtf");
+    }
+    // This is more than a little ugly.  Maybe we have more than one
+    // GUI?  Maybe each GUI needs a map from Piece objects to GuiPiece
+    // objects.
+    return result;
   }
   /**
    * Remove this object from the GUI.
@@ -160,7 +179,7 @@ class GroupHolder {
   }
   /**
    * Show an entire board full of new pieces.
-   * 
+   *
    * This will replace the old GUI with the new GUI all at once, with no animations.
    * @param allPieces What we want to show.
    * @returns The GUI that we are using to show it.
@@ -243,7 +262,7 @@ class GroupHolder {
     return result;
   }
   /**
-   * 
+   *
    * @param allPieces The current state of the board.
    * @returns A list of all groups of pieces which can be removed.
    */
@@ -551,9 +570,17 @@ class GUI {
     "ጃ",
     "ᔱ",
     "ᔰ",
+    "Ѧ",
+    "ᑥ",
+    //    "☃",
   ];
-  private static showGroups() {
-    const groups = GroupHolder.findActionable(this.#currentBoard.allPieces);
+  /**
+   * Find any groups that could be deleted, and highlight them on the
+   * screen.
+   * @param
+   */
+  private static showGroups(board: LogicalBoard) {
+    const groups = GroupHolder.findActionable(board.allPieces);
     if (groups.length > 0) {
       const decorations = [...this.#decorations];
       groups.forEach((group) => {
@@ -562,8 +589,7 @@ class GUI {
         const decorationText = decorations[decorationIndex];
         decorations.splice(decorationIndex, 1);
         group.contents.forEach((groupHolder) => {
-          const { row, column } = groupHolder;
-          const gElement = this.#currentlyVisible[row][column].element;
+          const gElement = GuiPiece.for(groupHolder.piece).element;
           const textElement = gElement.querySelector("text")!;
           textElement.textContent = decorationText;
           textElement.style.fill = decorationColor;
@@ -571,7 +597,16 @@ class GUI {
       });
     }
   }
-  //private static removeGroups() {}
+  /**
+   * Hide any text drawn as part of showGroups().
+   */
+  private static removeGroups() {
+    this.#currentlyVisible.forEach((row) =>
+      row.forEach(
+        (guiPiece) => (guiPiece.element.querySelector("text")!.textContent = "")
+      )
+    );
+  }
   private static draw() {
     this.resetAll();
     this.#currentlyVisible = this.#currentBoard.allPieces.map(
@@ -583,7 +618,6 @@ class GUI {
         });
       }
     );
-    this.showGroups();
   }
   private static resetAll() {
     this.#currentlyVisible.forEach((row) => {
@@ -621,6 +655,46 @@ class GUI {
         board.style.cursor = "move";
       }
     });
+    /**
+     * If the user let go now, how many cells should we try to rotate?
+     * @param pointerEvent
+     * @returns
+     */
+    const proposedOffset = (pointerEvent: PointerEvent): number => {
+      if (dragState == "none") {
+        return 0;
+      } else {
+        const current = translateCoordinates(pointerEvent);
+        if (dragState == "horizontal") {
+          return positiveModulo(
+            Math.round(dragStartColumn - current.column),
+            LogicalBoard.SIZE
+          );
+        } else if (dragState == "vertical") {
+          return positiveModulo(
+            Math.round(dragStartRow - current.row),
+            LogicalBoard.SIZE
+          );
+        } else if (dragState == "started") {
+          return 0;
+        }
+      }
+      throw new Error("wtf");
+    };
+    let possibleMoves: { board: LogicalBoard; groups: Group[] }[] | undefined;
+    /**
+     * Which row or column we are closest to.
+     *
+     * As you slide a row or column you get previews of what groups
+     * would form if you let go now.  You do **not** have to be perfectly
+     * lined up to get the preview.  The program shows you whichever
+     * position you are closest to.  I.e. the position gets _rounded_
+     * to the nearest integer before it is stored in previewOffset.
+     *
+     * Invariant:  (previewOffset >= 0) && (previewOffset < LogicalBoard.SIZE)
+     * proposedOffset() is the preferred way to update this.
+     */
+    let previewOffset = 0;
     board.addEventListener("pointermove", (pointerEvent) => {
       if (dragState == "none") {
         return;
@@ -644,11 +718,43 @@ class GUI {
           return;
         }
         fixedIndex = Math.max(0, Math.min(LogicalBoard.SIZE, fixedIndex));
+        if (possibleMoves) {
+          // It would be tempting to throw an exception here.
+          // But it like continuing would leave the program in a better state.
+          console.error("unexpected", possibleMoves);
+        }
+        const translate = dragState == "vertical" ? "rotateUp" : "rotateLeft";
+        possibleMoves = initializedArray(LogicalBoard.SIZE, (by) => {
+          const board = this.#currentBoard[translate](fixedIndex, by);
+          const groups = GroupHolder.findActionable(board.allPieces);
+          return { board, groups };
+        });
+        previewOffset = 0;
       }
       const wrap = (change: number) => {
         return positiveModulo(change + 0.5, LogicalBoard.SIZE) - 0.5;
       };
       if (dragState == "horizontal") {
+        // TODO
+        // Remove the call to display the groups when we display the board.  DONE
+        // In pointerdown we only reset some variables.
+        // We don't try to display the groups.  DONE
+        // It's slightly simpler this way and the should be no groups so it shouldn't matter.
+        // Set the previewOffset to 0.  DONE
+        // Each call to pointermove, if possibleMoves has been initialized,
+        // Check the current previewOffset.
+        // If the value has changed, then {
+        //   Store the new value of previewOffset.
+        //   Clear any group indications from the screen.
+        //   Clear the relevant timer, if one is active.
+        //   Set a new timer for 250 ms,
+        //   Store the timer's id in case we need to cancel it.
+        //   When the timer goes off, display the current group info.
+        //}
+        // Set possibleMoves to undefined in pointerup.
+        // How to draw the groups:
+        // Try using the existing code as is,
+        // It might be wrong, but it's a good starting place.
         const moveLeft = dragStartColumn - current.column;
         const row = this.#currentlyVisible[fixedIndex];
         row.forEach((guiPiece, columnIndex) => {
@@ -661,27 +767,35 @@ class GUI {
           guiPiece.setPosition(wrap(rowIndex - moveUp), fixedIndex);
         });
       }
+      if (possibleMoves) {
+        const newPreviewOffset = proposedOffset(pointerEvent);
+        if (newPreviewOffset != previewOffset) {
+          previewOffset = newPreviewOffset;
+          this.removeGroups();
+          //   Clear the relevant timer, if one is active.
+          //   Set a new timer for 250 ms,
+          //   Store the timer's id in case we need to cancel it.
+          this.showGroups(possibleMoves[previewOffset].board);
+        }
+      }
     });
+    /**
+     *
+     * @param pointerEvent
+     * @returns If the user let go of the mouse right now, this is what the board would look like.
+     */
+    const proposedBoard = (pointerEvent: PointerEvent): LogicalBoard => {
+      if (!possibleMoves) {
+        return this.currentBoard;
+      } else {
+        return possibleMoves[proposedOffset(pointerEvent)].board;
+      }
+    };
     board.addEventListener("lostpointercapture", (pointerEvent) => {
       // lostpointercapture will happen with pointer up or pointercancel.
       // So lostpointercapture is the safer option.
-      if (dragState == "none") {
-        return;
-      }
-      const current = translateCoordinates(pointerEvent);
-      if (dragState == "horizontal") {
-        this.currentBoard = this.currentBoard.rotateLeft(
-          fixedIndex,
-          Math.round(dragStartColumn - current.column)
-        );
-      } else if (dragState == "vertical") {
-        this.currentBoard = this.currentBoard.rotateUp(
-          fixedIndex,
-          Math.round(dragStartRow - current.row)
-        );
-      } else if (dragState == "started") {
-        this.draw();
-      }
+      this.currentBoard = proposedBoard(pointerEvent);
+      possibleMoves = undefined;
       dragState = "none";
       board.style.cursor = "";
     });
