@@ -87,6 +87,16 @@ class GuiPiece {
   setPosition(row: number, column: number) {
     this.element.setAttribute("transform", `translate(${column}, ${row})`);
   }
+  /**
+   *
+   * @param row 0 for the top row.  Can be negative or fractional.
+   * @param column 0 for the left column. Can be negative for fractional.
+   * @returns Instructions to move a piece to the given position.
+   * This is an a format appropriate for GuiPiece.element.animate().
+   */
+  static setPosition(row: number, column: number): Keyframe {
+    return { transform: `translate(${column}px, ${row}px)` };
+  }
   static readonly #BACK_LINK = Symbol("GuiPiece");
   constructor(public readonly piece: Piece) {
     (piece as any)[GuiPiece.#BACK_LINK] = this;
@@ -325,12 +335,13 @@ class Group {
 class LogicalBoard {
   static readonly SIZE = 6;
   private constructor(public readonly allPieces: AllPieces) {}
+  static randomPiece(): Piece {
+    return { weight: 1, color: pick(colors) };
+  }
   static createRandom(): LogicalBoard {
     // Start with completely random pieces.
     const pieces = initializedArray(LogicalBoard.SIZE, () =>
-      initializedArray(LogicalBoard.SIZE, (): Piece => {
-        return { weight: 1, color: pick(colors) };
-      })
+      initializedArray(LogicalBoard.SIZE, this.randomPiece)
     );
     // See if there are any groups that could immediately go away.
     const groups = GroupHolder.findActionable(pieces);
@@ -415,6 +426,80 @@ class LogicalBoard {
       );
     }
   }
+}
+
+type ColumnAnimation = {
+  addFromTop: Piece[];
+  addFromBottom: Piece[];
+  indicesToRemove: Iterable<number>;
+};
+
+function compileAnimation(
+  initialBoard: LogicalBoard,
+  groupsToRemove: Group[]
+): {
+  columns: ColumnAnimation[];
+  final: AllPieces;
+} {
+  /**
+   * The array index is the column number.
+   * The entries in each set are the row numbers.
+   */
+  const allIndicesToRemove = initializedArray(
+    LogicalBoard.SIZE,
+    () => new Set<number>()
+  );
+  groupsToRemove.forEach((group) => {
+    group.contents.forEach(({ row, column }) => {
+      const set = allIndicesToRemove[column];
+      if (set.has(row)) {
+        throw new Error("wtf"); // Duplicate.
+      }
+      set.add(row);
+    });
+  });
+  // Note this implementation is a bit simple.  Eventually we will
+  // need to deal with 2⨉2 chuzzle pieces.  That's why there's an
+  // addFromBottom section.
+  const columns = allIndicesToRemove.map((indicesToRemove): ColumnAnimation => {
+    const addFromTop = initializedArray(
+      indicesToRemove.size,
+      LogicalBoard.randomPiece
+    );
+    return { addFromBottom: [], addFromTop, indicesToRemove };
+  });
+  /**
+   * The first index is the row number, the second is the column number.
+   *
+   * This will eventually be returned as a AllPieces, but for now
+   * none of the arrays are read only.
+   */
+  const final = initializedArray(
+    LogicalBoard.SIZE,
+    () => new Array<Piece>(LogicalBoard.SIZE)
+  );
+  columns.forEach((columnAnimation, columnIndex) => {
+    const indicesToRemove = allIndicesToRemove[columnIndex];
+    const newColumn: Piece[] = [];
+    for (
+      let originalRowIndex = 0;
+      originalRowIndex < LogicalBoard.SIZE;
+      originalRowIndex++
+    ) {
+      if (!indicesToRemove.has(originalRowIndex)) {
+        newColumn.push(initialBoard.allPieces[columnIndex][originalRowIndex]);
+      }
+    }
+    while (newColumn.length < LogicalBoard.SIZE) {
+      const newPiece = LogicalBoard.randomPiece();
+      columnAnimation.addFromTop.push(newPiece);
+      newColumn.unshift(newPiece);
+    }
+    newColumn.forEach(
+      (piece, finalRowIndex) => (final[finalRowIndex][columnIndex] = piece)
+    );
+  });
+  return { columns, final };
 }
 
 class GUI {
@@ -573,6 +658,8 @@ class GUI {
     "Ѧ",
     "ᑥ",
     //    "☃",
+    // https://unicodeemoticons.com/cool_text_icons_and_pictures.htm
+    // https://jrgraphix.net/r/Unicode/2600-26FF
   ];
   /**
    * Find any groups that could be deleted, and highlight them on the
@@ -755,6 +842,7 @@ class GUI {
         // How to draw the groups:
         // Try using the existing code as is,
         // It might be wrong, but it's a good starting place.
+        // TODO Add an animation.
         const moveLeft = dragStartColumn - current.column;
         const row = this.#currentlyVisible[fixedIndex];
         row.forEach((guiPiece, columnIndex) => {
@@ -791,13 +879,44 @@ class GUI {
         return possibleMoves[proposedOffset(pointerEvent)].board;
       }
     };
-    board.addEventListener("lostpointercapture", (pointerEvent) => {
+    board.addEventListener("lostpointercapture", async (pointerEvent) => {
       // lostpointercapture will happen with pointer up or pointercancel.
       // So lostpointercapture is the safer option.
+      // TODO this step should be animated.
       this.currentBoard = proposedBoard(pointerEvent);
       possibleMoves = undefined;
       dragState = "none";
       board.style.cursor = "";
+      while (true) {
+        const groups = GroupHolder.findActionable(this.currentBoard.allPieces);
+        if (groups.length == 0) {
+          break;
+        }
+        const { columns, final } = compileAnimation(this.currentBoard, groups);
+        final;  // TODO actually use this!!!!
+        columns.forEach((columnAnimation, columnIndex) => {
+          for (const rowIndex of columnAnimation.indicesToRemove) {
+            //this.#currentlyVisible[rowIndex][columnIndex].element.style.opacity="0.125";
+            const element =
+              this.#currentlyVisible[rowIndex][columnIndex].element;
+            element.animate(
+              [
+                GuiPiece.setPosition(rowIndex, columnIndex),
+                GuiPiece.setPosition(
+                  LogicalBoard.SIZE * 1.5 + Math.random() * 2,
+                  Math.random() * LogicalBoard.SIZE
+                ),
+              ],
+              { duration: 1000, easing: "ease-in" }
+            );
+            // Does not work for svg:
+            //element.style.zIndex="3";
+            element.parentElement?.appendChild(element);
+          }
+        });
+        break;
+      }
+      // TODO restore the mouse.
     });
   })();
 }
@@ -827,6 +946,9 @@ function checkGroups() {
   GUI.currentBoard = GUI.currentBoard.rotateUp(columnNumber, by);
 };
 
+// This is a nice way to view the events.
+// But I'm not working on that right now and this display can be distracting.
+/*
 {
   const eventNames = [
     "pointerover",
@@ -865,3 +987,4 @@ function checkGroups() {
     });
   });
 }
+*/
