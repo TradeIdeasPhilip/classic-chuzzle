@@ -867,23 +867,97 @@ class GUI {
         }
       }
     });
-    /**
-     *
-     * @param pointerEvent
-     * @returns If the user let go of the mouse right now, this is what the board would look like.
-     */
-    const proposedBoard = (pointerEvent: PointerEvent): LogicalBoard => {
-      if (!possibleMoves) {
-        return this.currentBoard;
-      } else {
-        return possibleMoves[proposedOffset(pointerEvent)].board;
-      }
-    };
     board.addEventListener("lostpointercapture", async (pointerEvent) => {
       // lostpointercapture will happen with pointer up or pointercancel.
       // So lostpointercapture is the safer option.
-      // TODO this step should be animated.
-      this.currentBoard = proposedBoard(pointerEvent);
+      // The user has slid a row or column by some offset.
+      // Put the board back into a sane state.  The offset will be rounded to
+      // the nearest integer.  If that is not a valid spot, i.e. there are no
+      // cells to delete, then move back to the original spot before the
+      // user started moving anything.  Do not say
+      // this.currentBoard = proposedBoard(pointerEvent);
+      // the setter for currentBoard would destroy the visual indication of
+      // the groups.
+      {
+        if (!possibleMoves) {
+          console.warn("Does this even happen?");
+          // Maybe this should throw an exception?
+          // This does happen!  I'm not sure why.
+          // I saw 4 of these in a row in my console.
+        } else {
+          const offset = proposedOffset(pointerEvent);
+          const moves = possibleMoves[offset];
+          console.log("possibleMoves[proposedOffset(pointerEvent)]", moves);
+          const { newBoard, newOffset } =
+            moves.groups.length == 0
+              ? {
+                  newBoard: this.currentBoard,
+                  newOffset: 0,
+                }
+              : {
+                  newBoard: moves.board,
+                  newOffset: offset,
+                };
+          const promises: Promise<void>[] = [];
+          const animatedMove = (
+            guiPiece: GuiPiece,
+            destinationRow: number,
+            destinationColumn: number
+          ) => {
+            const duration = 1000;
+            const animation = guiPiece.element.animate(
+              [
+                //GuiPiece.setPosition(destinationRow - 3, destinationColumn - 3),
+                GuiPiece.setPosition(destinationRow, destinationColumn),
+              ],
+              { duration }
+            );
+            promises.push(
+              animation.finished.then(() =>
+                guiPiece.setPosition(destinationRow, destinationColumn)
+              )
+            );
+          };
+          if (dragState == "horizontal") {
+            const moveLeft = newOffset;
+            const row = this.#currentlyVisible[fixedIndex];
+            row.forEach((guiPiece, columnIndex) => {
+              animatedMove(
+                guiPiece,
+                fixedIndex,
+                positiveModulo(columnIndex - moveLeft, LogicalBoard.SIZE)
+              );
+            });
+          } else if (dragState == "vertical") {
+            const moveUp = newOffset;
+            this.#currentlyVisible.forEach((row, rowIndex) => {
+              const guiPiece = row[fixedIndex];
+              animatedMove(
+                guiPiece,
+                positiveModulo(rowIndex - moveUp, LogicalBoard.SIZE),
+                fixedIndex
+              );
+            });
+          }
+          if (promises.length > 0) {
+            this.#currentBoard = newBoard;
+            this.#currentlyVisible = this.#currentBoard.allPieces.map((row) =>
+              row.map((piece) => GuiPiece.for(piece))
+            );
+            await Promise.all(promises);
+            // TODO What about the case where one or more goes all the way around?
+            // That doesn't look good now.  It needs to be fixed.
+            // It needs to work just like normal sliding.
+            // TODO Timing is terrible.  It always takes the same
+            // amount of time to do this whether we move 0 pixels or
+            // half way around.  The time for the animation is proportional
+            // to the square root of the distance.
+            // TODO The faster we go, the bigger the overshoot should be.
+            // Use a cubic bezier for the timing function.
+          }
+        }
+      }
+
       possibleMoves = undefined;
       dragState = "none";
       board.style.cursor = "";
@@ -893,7 +967,7 @@ class GUI {
           break;
         }
         const { columns, final } = compileAnimation(this.currentBoard, groups);
-        final;  // TODO actually use this!!!!
+        final; // TODO actually use this!!!!
         columns.forEach((columnAnimation, columnIndex) => {
           for (const rowIndex of columnAnimation.indicesToRemove) {
             //this.#currentlyVisible[rowIndex][columnIndex].element.style.opacity="0.125";
