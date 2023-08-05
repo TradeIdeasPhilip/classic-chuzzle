@@ -822,12 +822,12 @@ class GUI {
         return positiveModulo(change + 0.5, LogicalBoard.SIZE) - 0.5;
       };
       if (dragState == "horizontal") {
-        // TODO
-        // Remove the call to display the groups when we display the board.  DONE
-        // In pointerdown we only reset some variables.
-        // We don't try to display the groups.  DONE
-        // It's slightly simpler this way and the should be no groups so it shouldn't matter.
-        // Set the previewOffset to 0.  DONE
+        // TODO:  The real game adds a delay before displaying the new groups.
+        //        The old groups are removed much more quickly.
+        //        Do I want to make mine more like the original?
+        //        The instructions here describe a plan for that,
+        //        but I'm not sure if I want the delay or if I like the groups
+        //        to show up instantly, like they do now.   
         // Each call to pointermove, if possibleMoves has been initialized,
         // Check the current previewOffset.
         // If the value has changed, then {
@@ -838,11 +838,6 @@ class GUI {
         //   Store the timer's id in case we need to cancel it.
         //   When the timer goes off, display the current group info.
         //}
-        // Set possibleMoves to undefined in pointerup.
-        // How to draw the groups:
-        // Try using the existing code as is,
-        // It might be wrong, but it's a good starting place.
-        // TODO Add an animation.
         const moveLeft = dragStartColumn - current.column;
         const row = this.#currentlyVisible[fixedIndex];
         row.forEach((guiPiece, columnIndex) => {
@@ -884,6 +879,11 @@ class GUI {
           // Maybe this should throw an exception?
           // This does happen!  I'm not sure why.
           // I saw 4 of these in a row in my console.
+          // I just saw this again.
+          // I was moving and clicking the mouse while the animation was running.
+          // I saw some other weirdness around the same time.
+          // There is already a TODO to disable the mouse clicks while an animation
+          // is active.
         } else {
           const offset = proposedOffset(pointerEvent);
           const moves = possibleMoves[offset];
@@ -899,7 +899,7 @@ class GUI {
                   newOffset: offset,
                 };
           const promises: Promise<void>[] = [];
-          const animatedMove = (
+          const animateMove = (
             guiPiece: GuiPiece,
             destinationRow: number,
             destinationColumn: number
@@ -922,7 +922,7 @@ class GUI {
             const moveLeft = newOffset;
             const row = this.#currentlyVisible[fixedIndex];
             row.forEach((guiPiece, columnIndex) => {
-              animatedMove(
+              animateMove(
                 guiPiece,
                 fixedIndex,
                 positiveModulo(columnIndex - moveLeft, LogicalBoard.SIZE)
@@ -932,7 +932,7 @@ class GUI {
             const moveUp = newOffset;
             this.#currentlyVisible.forEach((row, rowIndex) => {
               const guiPiece = row[fixedIndex];
-              animatedMove(
+              animateMove(
                 guiPiece,
                 positiveModulo(rowIndex - moveUp, LogicalBoard.SIZE),
                 fixedIndex
@@ -950,7 +950,7 @@ class GUI {
             // It needs to work just like normal sliding.
             // TODO Timing is terrible.  It always takes the same
             // amount of time to do this whether we move 0 pixels or
-            // half way around.  The time for the animation is proportional
+            // half way around.  The time for the animation should be proportional
             // to the square root of the distance.
             // TODO The faster we go, the bigger the overshoot should be.
             // Use a cubic bezier for the timing function.
