@@ -79,23 +79,52 @@ class GuiPiece {
   ).content.querySelector("g")!;
   readonly element: SVGGElement;
 
+  static readonly #positionColumn = CSS.px(Math.E);
+  static readonly #positionRow = CSS.px(Math.PI);
+  static readonly #positionHelper = new CSSTransformValue([
+    new CSSTranslate(this.#positionColumn, this.#positionRow),
+  ]);
+
+  #row = 0;
+  get row() {
+    return this.#row;
+  }
+  #column = 0;
+  get column() {
+    return this.#column;
+  }
+
   /**
    * Move the piece to the given position.
    * @param row 0 for the first row, 1 for the second.  Fractions and negative values work.
    * @param column  0 for the first row, 1 for the second.  Fractions and negative values work.
    */
   setPosition(row: number, column: number) {
-    this.element.setAttribute("transform", `translate(${column}, ${row})`);
+    GuiPiece.#positionColumn.value = this.#column = column;
+    GuiPiece.#positionRow.value = this.#row = row;
+    this.element.attributeStyleMap.set("transform", GuiPiece.#positionHelper);
   }
-  /**
-   *
-   * @param row 0 for the top row.  Can be negative or fractional.
-   * @param column 0 for the left column. Can be negative for fractional.
-   * @returns Instructions to move a piece to the given position.
-   * This is an a format appropriate for GuiPiece.element.animate().
-   */
-  static setPosition(row: number, column: number): Keyframe {
-    return { transform: `translate(${column}px, ${row}px)` };
+  animateMove(
+    row: number,
+    column: number,
+    options: number | KeyframeAnimationOptions
+  ) {
+    const initialColumn = this.#column;
+    const initialRow = this.#row;
+    this.setPosition(row, column);
+    const element = this.element;
+    // Does not work for svg: element.style.zIndex="3";
+    // So instead I'm moving it to the end of the list to get the same effect.
+    element.parentElement?.appendChild(element);
+    const animation = element.animate(
+      [
+        { transform: `translate(${initialColumn}px, ${initialRow}px)` },
+        { transform: `translate(${column}px, ${row}px)` },
+      ],
+      options
+    );
+    console.log(`translate(${initialColumn}px, ${initialRow}px)`,`translate(${column}px, ${row}px)`);
+    return animation.finished;
   }
   static readonly #BACK_LINK = Symbol("GuiPiece");
   constructor(public readonly piece: Piece) {
@@ -727,7 +756,12 @@ class GUI {
         column: xToColumn(pointerEvent.clientX),
       };
     }
-    let dragState: "none" | "started" | "horizontal" | "vertical" = "none";
+    let dragState:
+      | "none"
+      | "started"
+      | "horizontal"
+      | "vertical"
+      | "animation" = "none";
     let dragStartRow = -1;
     let dragStartColumn = -1;
     let fixedIndex = -1;
@@ -783,7 +817,7 @@ class GUI {
      */
     let previewOffset = 0;
     board.addEventListener("pointermove", (pointerEvent) => {
-      if (dragState == "none") {
+      if (dragState == "none" || dragState == "animation") {
         return;
       }
       pointerEvent.stopPropagation();
@@ -827,7 +861,7 @@ class GUI {
         //        Do I want to make mine more like the original?
         //        The instructions here describe a plan for that,
         //        but I'm not sure if I want the delay or if I like the groups
-        //        to show up instantly, like they do now.   
+        //        to show up instantly, like they do now.
         // Each call to pointermove, if possibleMoves has been initialized,
         // Check the current previewOffset.
         // If the value has changed, then {
@@ -898,25 +932,19 @@ class GUI {
                   newBoard: moves.board,
                   newOffset: offset,
                 };
-          const promises: Promise<void>[] = [];
+          const promises: Promise<unknown>[] = [];
           const animateMove = (
             guiPiece: GuiPiece,
             destinationRow: number,
             destinationColumn: number
           ) => {
-            const duration = 1000;
-            const animation = guiPiece.element.animate(
-              [
-                //GuiPiece.setPosition(destinationRow - 3, destinationColumn - 3),
-                GuiPiece.setPosition(destinationRow, destinationColumn),
-              ],
-              { duration }
+            const duration = 10000;
+            const promise = guiPiece.animateMove(
+              destinationRow,
+              destinationColumn,
+              duration
             );
-            promises.push(
-              animation.finished.then(() =>
-                guiPiece.setPosition(destinationRow, destinationColumn)
-              )
-            );
+            promises.push(promise);
           };
           if (dragState == "horizontal") {
             const moveLeft = newOffset;
@@ -959,7 +987,7 @@ class GUI {
       }
 
       possibleMoves = undefined;
-      dragState = "none";
+      dragState = "animation";
       board.style.cursor = "";
       while (true) {
         const groups = GroupHolder.findActionable(this.currentBoard.allPieces);
@@ -971,26 +999,17 @@ class GUI {
         columns.forEach((columnAnimation, columnIndex) => {
           for (const rowIndex of columnAnimation.indicesToRemove) {
             //this.#currentlyVisible[rowIndex][columnIndex].element.style.opacity="0.125";
-            const element =
-              this.#currentlyVisible[rowIndex][columnIndex].element;
-            element.animate(
-              [
-                GuiPiece.setPosition(rowIndex, columnIndex),
-                GuiPiece.setPosition(
-                  LogicalBoard.SIZE * 1.5 + Math.random() * 2,
-                  Math.random() * LogicalBoard.SIZE
-                ),
-              ],
-              { duration: 1000, easing: "ease-in" }
+            const guiPiece = this.#currentlyVisible[rowIndex][columnIndex];
+            guiPiece.animateMove(
+              LogicalBoard.SIZE * 1.5 + Math.random() * 2,
+              Math.random() * LogicalBoard.SIZE,
+              { duration: 10000, easing: "ease-in" }
             );
-            // Does not work for svg:
-            //element.style.zIndex="3";
-            element.parentElement?.appendChild(element);
           }
         });
         break;
       }
-      // TODO restore the mouse.
+      dragState = "none";
     });
   })();
 }
