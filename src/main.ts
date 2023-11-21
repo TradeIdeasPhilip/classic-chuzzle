@@ -686,6 +686,7 @@ class GUI {
     "ᔰ",
     "Ѧ",
     "ᑥ",
+    "𝄢",
     //    "☃",
     // https://unicodeemoticons.com/cool_text_icons_and_pictures.htm
     // https://jrgraphix.net/r/Unicode/2600-26FF
@@ -1020,7 +1021,10 @@ class GUI {
  */
 type AllGroupHolders = ReadonlyArray<ReadonlyArray<GroupHolder>>;
 
-function checkGroups() {
+
+// Debug only
+
+(window as any).checkGroups = () => {
   const groups = GroupHolder.findActionable(GUI.currentBoard.allPieces);
   console.log(groups);
 }
@@ -1028,8 +1032,6 @@ function checkGroups() {
 // Debug stuff.  All of the functions below will automatically be called by the GUI.
 // This allows me to test the functions in isolation,
 // and to test them before the GUI is ready.
-
-(window as any).checkGroups = checkGroups;
 
 (window as any).rotateLeft = (rowNumber: number, by: number) => {
   GUI.currentBoard = GUI.currentBoard.rotateLeft(rowNumber, by);
