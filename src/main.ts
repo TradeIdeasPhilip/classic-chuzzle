@@ -123,7 +123,12 @@ class GuiPiece {
       ],
       options
     );
-    console.log(`translate(${initialColumn}px, ${initialRow}px)`,`translate(${column}px, ${row}px)`);
+    /*
+    console.log(
+      `translate(${initialColumn}px, ${initialRow}px)`,
+      `translate(${column}px, ${row}px)`
+    );
+    */
     return animation.finished;
   }
   static readonly #BACK_LINK = Symbol("GuiPiece");
@@ -803,7 +808,9 @@ class GUI {
       }
       throw new Error("wtf");
     };
-    let possibleMoves: { board: LogicalBoard; groups: Group[] }[] | undefined;
+    let possibleMoves:
+      | { readonly board: LogicalBoard; readonly groups: Group[] }[]
+      | undefined;
     /**
      * Which row or column we are closest to.
      *
@@ -842,7 +849,7 @@ class GUI {
         fixedIndex = Math.max(0, Math.min(LogicalBoard.SIZE, fixedIndex));
         if (possibleMoves) {
           // It would be tempting to throw an exception here.
-          // But it like continuing would leave the program in a better state.
+          // But it seems like continuing would leave the program in a better state.
           console.error("unexpected", possibleMoves);
         }
         const translate = dragState == "vertical" ? "rotateUp" : "rotateLeft";
@@ -900,6 +907,27 @@ class GUI {
     board.addEventListener("lostpointercapture", async (pointerEvent) => {
       // lostpointercapture will happen with pointer up or pointercancel.
       // So lostpointercapture is the safer option.
+      if (dragState == "none" || dragState == "started") {
+        // Someone clicked the mouse but didn't move it enough to have any effect.
+        // I.e. the GUI hasn't changed at all, and neither has the state of the board.
+        dragState = "none";
+        board.style.cursor = "";
+        if (possibleMoves) {
+          // Invariant failed.
+          // possibleMoves should be undefined if and only if dragState is "none" or "started".
+          // Note that this leaves the board in a bad state!
+          throw new Error("wtf");
+        }
+        return;
+      }
+
+      board.style.cursor = "wait";
+
+      /**
+       * The program typically starts multiple animations at the same time.
+       */
+      const promises: Promise<unknown>[] = [];
+
       // The user has slid a row or column by some offset.
       // Put the board back into a sane state.  The offset will be rounded to
       // the nearest integer.  If that is not a valid spot, i.e. there are no
@@ -908,88 +936,80 @@ class GUI {
       // this.currentBoard = proposedBoard(pointerEvent);
       // the setter for currentBoard would destroy the visual indication of
       // the groups.
-      {
-        if (!possibleMoves) {
-          console.warn("Does this even happen?");
-          // Maybe this should throw an exception?
-          // This does happen!  I'm not sure why.
-          // I saw 4 of these in a row in my console.
-          // I just saw this again.
-          // I was moving and clicking the mouse while the animation was running.
-          // I saw some other weirdness around the same time.
-          // There is already a TODO to disable the mouse clicks while an animation
-          // is active.
-        } else {
-          const offset = proposedOffset(pointerEvent);
-          const moves = possibleMoves[offset];
-          console.log("possibleMoves[proposedOffset(pointerEvent)]", moves);
-          const { newBoard, newOffset } =
-            moves.groups.length == 0
-              ? {
-                  newBoard: this.currentBoard,
-                  newOffset: 0,
-                }
-              : {
-                  newBoard: moves.board,
-                  newOffset: offset,
-                };
-          const promises: Promise<unknown>[] = [];
-          const animateMove = (
-            guiPiece: GuiPiece,
-            destinationRow: number,
-            destinationColumn: number
-          ) => {
-            const duration = 10000;
-            const promise = guiPiece.animateMove(
-              destinationRow,
-              destinationColumn,
-              duration
-            );
-            promises.push(promise);
-          };
-          if (dragState == "horizontal") {
-            const moveLeft = newOffset;
-            const row = this.#currentlyVisible[fixedIndex];
-            row.forEach((guiPiece, columnIndex) => {
-              animateMove(
-                guiPiece,
-                fixedIndex,
-                positiveModulo(columnIndex - moveLeft, LogicalBoard.SIZE)
-              );
-            });
-          } else if (dragState == "vertical") {
-            const moveUp = newOffset;
-            this.#currentlyVisible.forEach((row, rowIndex) => {
-              const guiPiece = row[fixedIndex];
-              animateMove(
-                guiPiece,
-                positiveModulo(rowIndex - moveUp, LogicalBoard.SIZE),
-                fixedIndex
-              );
-            });
-          }
-          if (promises.length > 0) {
-            this.#currentBoard = newBoard;
-            this.#currentlyVisible = this.#currentBoard.allPieces.map((row) =>
-              row.map((piece) => GuiPiece.for(piece))
-            );
-            await Promise.all(promises);
-            // TODO What about the case where one or more goes all the way around?
-            // That doesn't look good now.  It needs to be fixed.
-            // It needs to work just like normal sliding.
-            // TODO Timing is terrible.  It always takes the same
-            // amount of time to do this whether we move 0 pixels or
-            // half way around.  The time for the animation should be proportional
-            // to the square root of the distance.
-            // TODO The faster we go, the bigger the overshoot should be.
-            // Use a cubic bezier for the timing function.
-          }
-        }
+      if (!possibleMoves) {
+        // Invariant failed.
+        // possibleMoves should be undefined if and only if dragState is "none" or "started".
+        throw new Error("wtf");
+      }
+      const offset = proposedOffset(pointerEvent);
+      const moves = possibleMoves[offset];
+      console.log("possibleMoves[proposedOffset(pointerEvent)]", moves);
+      const { newBoard, newOffset } =
+        moves.groups.length == 0
+          ? {
+              newBoard: this.currentBoard,
+              newOffset: 0,
+            }
+          : {
+              newBoard: moves.board,
+              newOffset: offset,
+            };
+      const animateMove = (
+        guiPiece: GuiPiece,
+        destinationRow: number,
+        destinationColumn: number
+      ) => {
+        const duration = 1000;
+        const promise = guiPiece.animateMove(
+          destinationRow,
+          destinationColumn,
+          duration
+        );
+        promises.push(promise);
+      };
+      if (dragState == "horizontal") {
+        const moveLeft = newOffset;
+        const row = this.#currentlyVisible[fixedIndex];
+        row.forEach((guiPiece, columnIndex) => {
+          animateMove(
+            guiPiece,
+            fixedIndex,
+            positiveModulo(columnIndex - moveLeft, LogicalBoard.SIZE)
+          );
+        });
+      } else if (dragState == "vertical") {
+        const moveUp = newOffset;
+        this.#currentlyVisible.forEach((row, rowIndex) => {
+          const guiPiece = row[fixedIndex];
+          animateMove(
+            guiPiece,
+            positiveModulo(rowIndex - moveUp, LogicalBoard.SIZE),
+            fixedIndex
+          );
+        });
       }
 
-      possibleMoves = undefined;
       dragState = "animation";
-      board.style.cursor = "";
+
+      if (promises.length > 0) {
+        this.#currentBoard = newBoard;
+        this.#currentlyVisible = this.#currentBoard.allPieces.map((row) =>
+          row.map((piece) => GuiPiece.for(piece))
+        );
+        await Promise.all(promises);
+        promises.length = 0;
+        // TODO What about the case where one or more goes all the way around?
+        // That doesn't look good now.  It needs to be fixed.
+        // It needs to work just like normal sliding.
+        // TODO Timing is terrible.  It always takes the same
+        // amount of time to do this whether we move 0 pixels or
+        // half way around.  The time for the animation should be proportional
+        // to the square root of the distance.
+        // TODO The faster we go, the bigger the overshoot should be.
+        // Use a cubic bezier for the timing function.
+      }
+      possibleMoves = undefined;
+
       while (true) {
         const groups = GroupHolder.findActionable(this.currentBoard.allPieces);
         if (groups.length == 0) {
@@ -1001,15 +1021,19 @@ class GUI {
           for (const rowIndex of columnAnimation.indicesToRemove) {
             //this.#currentlyVisible[rowIndex][columnIndex].element.style.opacity="0.125";
             const guiPiece = this.#currentlyVisible[rowIndex][columnIndex];
-            guiPiece.animateMove(
-              LogicalBoard.SIZE * 1.5 + Math.random() * 2,
-              Math.random() * LogicalBoard.SIZE,
-              { duration: 10000, easing: "ease-in" }
+            promises.push(
+              guiPiece.animateMove(
+                LogicalBoard.SIZE * 1.5 + Math.random() * 2,
+                Math.random() * LogicalBoard.SIZE,
+                { duration: 3000, easing: "ease-in" }
+              )
             );
           }
         });
         break;
       }
+      await Promise.all(promises);
+      board.style.cursor = "";
       dragState = "none";
     });
   })();
@@ -1021,13 +1045,12 @@ class GUI {
  */
 type AllGroupHolders = ReadonlyArray<ReadonlyArray<GroupHolder>>;
 
-
 // Debug only
 
 (window as any).checkGroups = () => {
   const groups = GroupHolder.findActionable(GUI.currentBoard.allPieces);
   console.log(groups);
-}
+};
 
 // Debug stuff.  All of the functions below will automatically be called by the GUI.
 // This allows me to test the functions in isolation,
