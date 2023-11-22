@@ -1,8 +1,7 @@
 Very early.
 Not ready for public consumption.
 
-Here's the last version that compiled: https://tradeideasphilip.github.io/classic-chuzzle/.
-This currently runs in development mode, but I can't compile it with tsc for some reason.
+Try it yourself:  https://tradeideasphilip.github.io/classic-chuzzle/.
 
 I like Classic Chuzzle but I want to fix a few things.
 I don't have their source code so I have to start from scratch.
