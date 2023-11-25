@@ -1004,6 +1004,14 @@ class GUI {
         duration,
         easing: "ease-in-out",
       };
+      /**
+       *
+       * @param initialPosition Where the GuiPiece is right now.
+       * This is the only part that is different for each piece.
+       * The other info comes from variables above.
+       * @returns An array of `position`s, an array of times labeled `offset`, and a `finalPosition`.
+       * `offset` is in the right format for a PropertyIndexedKeyframes input to `Element.animate()`.
+       */
       const makeScript = (initialPosition: number) => {
         const position = [initialPosition];
         const offset = [0];
@@ -1012,18 +1020,38 @@ class GUI {
           LogicalBoard.SIZE
         );
         if (finalPosition > 5.1) {
-          debugger;
+          // finalPosition should be an integer ≥ 0 and < LogicalBoard.SIZE
+          throw new Error("wtf");
         }
+        /**
+         * Add points to the script to make the GuiPiece wrap around.
+         * @param secondPosition The position of the GuiPiece immediately _before_ it jumps to the other side.
+         * @param thirdPosition The position of the GuiPiece immediately _after_ it jumps to the other side.
+         */
+        const addMiddle = (secondPosition: number, thirdPosition: number) => {
+          position.push(secondPosition, thirdPosition);
+          /** How far to move _before_ wrapping. */
+          const initialSize = Math.abs(initialPosition - secondPosition);
+          /** How far to move _after_ wrapping. */
+          const finalSize = Math.abs(thirdPosition - finalPosition);
+          /** Total amount of the move. */
+          const totalSize = initialSize + finalSize;
+          /**
+           * When to make the jump.  0 would mean at the very beginning.
+           * 1 would mean at the very end.  This is the right format for
+           * Element.animate().
+           */
+          const jumpTime = initialSize / totalSize;
+          offset.push(jumpTime, jumpTime);
+        };
         // If the piece wraps around, add some intermediate points.
         if (Math.sign(needToMove) == -1) {
           if (finalPosition > initialPosition) {
-            position.push(-0.5, LogicalBoard.SIZE - 0.5);
-            offset.push(0.5, 0.5); // TODO better number here!
+            addMiddle(-0.5, LogicalBoard.SIZE - 0.5);
           }
         } else {
           if (finalPosition < initialPosition) {
-            position.push(LogicalBoard.SIZE - 0.5, -0.5);
-            offset.push(0.5, 0.5); // TODO better number here!
+            addMiddle(LogicalBoard.SIZE - 0.5, -0.5);
           }
         }
         position.push(finalPosition);
@@ -1102,7 +1130,7 @@ class GUI {
               guiPiece.animateMove(
                 LogicalBoard.SIZE * 1.5 + Math.random() * 2,
                 Math.random() * LogicalBoard.SIZE,
-                { duration: 3000, easing: "ease-in" }
+                { duration: 1000, easing: "ease-in" }
               )
             );
           }
