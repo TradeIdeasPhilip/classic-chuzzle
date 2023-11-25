@@ -783,6 +783,35 @@ class GUI {
       }
     });
     /**
+     *
+     * @param pointerEvent This contains the current position of the mouse.
+     * It is not possible to read from the mouse at arbitrary times.
+     * @returns How far left or up the mouse has moved since mouse down.
+     * This can be negative  if the mouse moved right or down.  This can
+     * be greater than LogicalBoard.SIZE.  This will be `undefined` if
+     * we are not currently moving in any particular direction.
+     */
+    const relevantMouseMove = (
+      pointerEvent: PointerEvent
+    ): number | undefined => {
+      switch (dragState) {
+        case "none":
+        case "started":
+        case "animation": {
+          return undefined;
+        }
+        case "horizontal": {
+          const { column } = translateCoordinates(pointerEvent);
+          return dragStartColumn - column;
+        }
+        case "vertical": {
+          const { row } = translateCoordinates(pointerEvent);
+          return dragStartRow - row;
+        }
+      }
+      throw new Error("wtf");
+    };
+    /**
      * If the user let go now, how many cells should we try to rotate?
      * @param pointerEvent
      * @returns
@@ -943,7 +972,6 @@ class GUI {
       }
       const offset = proposedOffset(pointerEvent);
       const moves = possibleMoves[offset];
-      console.log("possibleMoves[proposedOffset(pointerEvent)]", moves);
       const { newBoard, newOffset } =
         moves.groups.length == 0
           ? {
@@ -954,38 +982,87 @@ class GUI {
               newBoard: moves.board,
               newOffset: offset,
             };
-      const animateMove = (
-        guiPiece: GuiPiece,
-        destinationRow: number,
-        destinationColumn: number
-      ) => {
-        const duration = 1000;
-        const promise = guiPiece.animateMove(
-          destinationRow,
-          destinationColumn,
-          duration
-        );
-        promises.push(promise);
+      /**
+       * What's the quickest way to get to the goal?
+       * Remember that the items can rotate around.
+       * This is the number of cells to move down or right.
+       * 0 means the board is already correct.
+       * Negative numbers means to move left or up.
+       */
+      const needToMove =
+        positiveModulo(
+          relevantMouseMove(pointerEvent)! - newOffset + LogicalBoard.SIZE / 2,
+          LogicalBoard.SIZE
+        ) -
+        LogicalBoard.SIZE / 2;
+      /**
+       * Two seconds at most.  That's to go half way.
+       * We never go more than half way!
+       */
+      const duration = (Math.abs(needToMove) * 4000) / LogicalBoard.SIZE;
+      const options: KeyframeAnimationOptions = {
+        duration,
+        easing: "ease-in-out",
       };
+      const makeScript = (initialPosition: number) => {
+        const position = [initialPosition];
+        const offset = [0];
+        const finalPosition = positiveModulo(
+          Math.round(initialPosition + needToMove),
+          LogicalBoard.SIZE
+        );
+        if (finalPosition > 5.1) {
+          debugger;
+        }
+        // If the piece wraps around, add some intermediate points.
+        if (Math.sign(needToMove) == -1) {
+          if (finalPosition > initialPosition) {
+            position.push(-0.5, LogicalBoard.SIZE - 0.5);
+            offset.push(0.5, 0.5); // TODO better number here!
+          }
+        } else {
+          if (finalPosition < initialPosition) {
+            position.push(LogicalBoard.SIZE - 0.5, -0.5);
+            offset.push(0.5, 0.5); // TODO better number here!
+          }
+        }
+        position.push(finalPosition);
+        offset.push(1.0);
+        return { position, offset, finalPosition };
+      };
+      //console.log({ needToMove, duration });
       if (dragState == "horizontal") {
-        const moveLeft = newOffset;
         const row = this.#currentlyVisible[fixedIndex];
-        row.forEach((guiPiece, columnIndex) => {
-          animateMove(
-            guiPiece,
-            fixedIndex,
-            positiveModulo(columnIndex - moveLeft, LogicalBoard.SIZE)
+        row.forEach((guiPiece) => {
+          const {
+            position,
+            offset,
+            finalPosition: finalColumnPosition,
+          } = makeScript(guiPiece.column);
+          const transform = position.map(
+            (column) => `translate(${column}px, ${fixedIndex}px)`
           );
+          promises.push(
+            guiPiece.element.animate({ transform, offset }, options).finished
+          );
+          //console.log({ transform, offset });
+          guiPiece.setPosition(fixedIndex, finalColumnPosition);
         });
       } else if (dragState == "vertical") {
-        const moveUp = newOffset;
-        this.#currentlyVisible.forEach((row, rowIndex) => {
+        this.#currentlyVisible.forEach((row) => {
           const guiPiece = row[fixedIndex];
-          animateMove(
-            guiPiece,
-            positiveModulo(rowIndex - moveUp, LogicalBoard.SIZE),
-            fixedIndex
+          const {
+            position,
+            offset,
+            finalPosition: finalRowPosition,
+          } = makeScript(guiPiece.row);
+          const transform = position.map(
+            (row) => `translate(${fixedIndex}px, ${row}px)`
           );
+          promises.push(
+            guiPiece.element.animate({ transform, offset }, options).finished
+          );
+          guiPiece.setPosition(finalRowPosition, fixedIndex);
         });
       }
 
