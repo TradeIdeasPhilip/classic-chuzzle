@@ -750,9 +750,21 @@ class GUI {
     this.#currentlyVisible = [];
     this.hideTemporaries();
   }
+  /**
+   * Set up the event handlers.
+   */
   static #staticInit: void = (() => {
     this.draw();
     const board = getById("board", SVGElement);
+    /**
+     *
+     * @param pointerEvent The browser gives mouse data to the program when an event occurs.  The program cannot ask for this data at other times.
+     * @returns The mouse position in the same units as the SVG uses.
+     * - 1 is the height and width of a single`GuiPiece`.
+     * - (0, 0) is the top left corner of the board.
+     * - Fractions are possible.
+     * - Values can be off the board because the program does a mouse capture.
+     */
     function translateCoordinates(pointerEvent: PointerEvent) {
       const rect = board.getBoundingClientRect();
       const yToRow = makeLinear(rect.top, 0, rect.bottom, LogicalBoard.SIZE);
@@ -762,14 +774,31 @@ class GUI {
         column: xToColumn(pointerEvent.clientX),
       };
     }
+    /**
+     * - `none` — We are not currently tracking the mouse.  This is the ideal place to start tracking the mouse.
+     * - `started` — The user clicked the mouse but hasn't moved the mouse yet.  Or hasn't moved it enough for the program to notice it.
+     * - `horizontal` — The user moved the mouse left or right, so the program is moving items left and right.  Any movement up or down is ignored.
+     * - `vertical` — The user moved the mouse up or down, so the program is moving items up and down.  Any movement left or right is ignored.
+     * - `animation` — The user let go of the mouse and the program is displaying something.  The program ignores any user input until the animation finishes.
+     */
     let dragState:
       | "none"
       | "started"
       | "horizontal"
       | "vertical"
       | "animation" = "none";
+    /**
+     * Where was the most recent mouse down event.
+     */
     let dragStartRow = -1;
+    /**
+     * Where was the most recent mouse down event.
+     */
     let dragStartColumn = -1;
+    /**
+     * If `dragState == "horizontal"` this is the row number.
+     * If `dragState == "vertical"` this is the column number.
+     */
     let fixedIndex = -1;
     board.addEventListener("pointerdown", (pointerEvent) => {
       if (dragState == "none") {
@@ -814,7 +843,7 @@ class GUI {
     /**
      * If the user let go now, how many cells should we try to rotate?
      * @param pointerEvent
-     * @returns
+     * @returns This is always an integer between 0 and (LogicalBoard.SIZE - 1).
      */
     const proposedOffset = (pointerEvent: PointerEvent): number => {
       if (dragState == "none") {
@@ -837,6 +866,14 @@ class GUI {
       }
       throw new Error("wtf");
     };
+    /**
+     * What to do if the user lets go of the mouse.
+     *
+     * The index should be the output of `proposedOffset()`.
+     *
+     * `board` is the state of the board if the user let go at that point, before anything was deleted.
+     * `groups` is a list of groups to highlight as the user passes through this state, and to delete if the user lets go here.
+     */
     let possibleMoves:
       | { readonly board: LogicalBoard; readonly groups: Group[] }[]
       | undefined;
@@ -858,11 +895,13 @@ class GUI {
         return;
       }
       pointerEvent.stopPropagation();
+      /** The current mouse position in SVG coordinates.  */
       const current = translateCoordinates(pointerEvent);
       if (dragState == "started") {
         const rowDiff = Math.abs(current.row - dragStartRow);
         const columnDiff = Math.abs(current.column - dragStartColumn);
         if (Math.max(rowDiff, columnDiff) < 0.05) {
+          // The mouse hasn't moved enough.  Don't lock the user into a direction just because he barely jiggled the mouse while clicking.
           return;
         } else if (rowDiff > columnDiff) {
           dragState = "vertical";
@@ -877,9 +916,8 @@ class GUI {
         }
         fixedIndex = Math.max(0, Math.min(LogicalBoard.SIZE, fixedIndex));
         if (possibleMoves) {
-          // It would be tempting to throw an exception here.
-          // But it seems like continuing would leave the program in a better state.
-          console.error("unexpected", possibleMoves);
+          // Invariant failed.
+          throw new Error("wtf");
         }
         const translate = dragState == "vertical" ? "rotateUp" : "rotateLeft";
         possibleMoves = initializedArray(LogicalBoard.SIZE, (by) => {
@@ -889,26 +927,20 @@ class GUI {
         });
         previewOffset = 0;
       }
+      /**
+       * Useful when we display a `GuiPiece` part way off the board.
+       * This attaches to piece to whichever side leaves more of the piece on the board.
+       * @param change
+       * @returns A value between -½ and LogicalBoard.SIZE - ½.
+       */
       const wrap = (change: number) => {
         return positiveModulo(change + 0.5, LogicalBoard.SIZE) - 0.5;
       };
       if (dragState == "horizontal") {
-        // TODO:  The real game adds a delay before displaying the new groups.
-        //        The old groups are removed much more quickly.
-        //        Do I want to make mine more like the original?
-        //        The instructions here describe a plan for that,
-        //        but I'm not sure if I want the delay or if I like the groups
-        //        to show up instantly, like they do now.
-        // Each call to pointermove, if possibleMoves has been initialized,
-        // Check the current previewOffset.
-        // If the value has changed, then {
-        //   Store the new value of previewOffset.
-        //   Clear any group indications from the screen.
-        //   Clear the relevant timer, if one is active.
-        //   Set a new timer for 250 ms,
-        //   Store the timer's id in case we need to cancel it.
-        //   When the timer goes off, display the current group info.
-        //}
+        /**
+         * How far left the user has moved, in SVG units.
+         * Negative numbers move right.
+         */
         const moveLeft = dragStartColumn - current.column;
         const row = this.#currentlyVisible[fixedIndex];
         row.forEach((guiPiece, columnIndex) => {
@@ -943,7 +975,7 @@ class GUI {
         board.style.cursor = "";
         if (possibleMoves) {
           // Invariant failed.
-          // possibleMoves should be undefined if and only if dragState is "none" or "started".
+          // possibleMoves should be defined if and only if dragState is "horizontal" or "vertical".
           // Note that this leaves the board in a bad state!
           throw new Error("wtf");
         }
@@ -967,10 +999,18 @@ class GUI {
       // the groups.
       if (!possibleMoves) {
         // Invariant failed.
-        // possibleMoves should be undefined if and only if dragState is "none" or "started".
+        // possibleMoves should be defined if and only if dragState is "horizontal" or "vertical".
         throw new Error("wtf");
       }
+      /**
+       * How far to move the row or column from the original position.
+       * This might _not_ be a legal move.
+       * See `newBoard` for the actual amount after the program disables illegal moves.
+       */
       const offset = proposedOffset(pointerEvent);
+      /**
+       * What would happen if the user was allowed to move by `offset` units.
+       */
       const moves = possibleMoves[offset];
       const { newBoard, newOffset } =
         moves.groups.length == 0
@@ -1005,8 +1045,10 @@ class GUI {
         easing: "ease-in-out",
       };
       /**
-       *
-       * @param initialPosition Where the GuiPiece is right now.
+       * How should a `GuiPiece` move?
+       * This takes care of the fact that some pieces will wrap around.
+       * All pieces will move at the same rate, so the pieces will always be touching.
+       * @param initialPosition Where the `GuiPiece` is right now.
        * This is the only part that is different for each piece.
        * The other info comes from variables above.
        * @returns An array of `position`s, an array of times labeled `offset`, and a `finalPosition`.
@@ -1103,18 +1145,10 @@ class GUI {
         );
         await Promise.all(promises);
         promises.length = 0;
-        // TODO What about the case where one or more goes all the way around?
-        // That doesn't look good now.  It needs to be fixed.
-        // It needs to work just like normal sliding.
-        // TODO Timing is terrible.  It always takes the same
-        // amount of time to do this whether we move 0 pixels or
-        // half way around.  The time for the animation should be proportional
-        // to the square root of the distance.
-        // TODO The faster we go, the bigger the overshoot should be.
-        // Use a cubic bezier for the timing function.
       }
       possibleMoves = undefined;
 
+      // Remove some pieces from the board because the colors matched matched.
       while (true) {
         const groups = GroupHolder.findActionable(this.currentBoard.allPieces);
         if (groups.length == 0) {
@@ -1124,7 +1158,6 @@ class GUI {
         final; // TODO actually use this!!!!
         columns.forEach((columnAnimation, columnIndex) => {
           for (const rowIndex of columnAnimation.indicesToRemove) {
-            //this.#currentlyVisible[rowIndex][columnIndex].element.style.opacity="0.125";
             const guiPiece = this.#currentlyVisible[rowIndex][columnIndex];
             promises.push(
               guiPiece.animateMove(
