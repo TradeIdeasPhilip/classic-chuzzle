@@ -69,6 +69,9 @@ type Piece = {
  * I separated GuiPiece from Piece in case the GUI changed.
  */
 class GuiPiece {
+  static removeAll() {
+    this.#board.innerHTML = "";
+  }
   /**
    * The GuiPiece elements will go on this #board.
    */
@@ -156,12 +159,6 @@ class GuiPiece {
     // GUI?  Maybe each GUI needs a map from Piece objects to GuiPiece
     // objects.
     return result;
-  }
-  /**
-   * Remove this object from the GUI.
-   */
-  remove() {
-    this.element.remove();
   }
 }
 
@@ -369,6 +366,16 @@ class Group {
 class LogicalBoard {
   static readonly SIZE = 6;
   private constructor(public readonly allPieces: AllPieces) {}
+
+  /**
+   *
+   * @param columnIndex
+   * @returns A _new_ array containing the `Piece`s in the given column.
+   */
+  getColumn(columnIndex: number) {
+    return this.allPieces.map((row) => row[columnIndex]);
+  }
+
   static randomPiece(): Piece {
     return { weight: 1, color: pick(colors) };
   }
@@ -460,81 +467,83 @@ class LogicalBoard {
       );
     }
   }
+
+  /**
+   * Rearrange the pieces that we want to remove and create replacement pieces.
+   *
+   * This doesn't know anything about the GUI except that it will try to show individual steps.
+   * @param groupsToRemove
+   * @returns A list of instruction for each column, and the final state of the board.
+   */
+  compileAnimation(groupsToRemove: Group[]): {
+    columns: ColumnAnimation[];
+    final: LogicalBoard;
+  } {
+    /**
+     * The array index is the column number.
+     * The entries in each set are the row numbers.
+     */
+    const allIndicesToRemove = initializedArray(
+      LogicalBoard.SIZE,
+      () => new Set<number>()
+    );
+    groupsToRemove.forEach((group) => {
+      group.contents.forEach(({ row, column }) => {
+        const set = allIndicesToRemove[column];
+        if (set.has(row)) {
+          throw new Error("wtf"); // Duplicate.
+        }
+        set.add(row);
+      });
+    });
+    // Note this implementation is a bit simple.  Eventually we will
+    // need to deal with 2⨉2 chuzzle pieces.  That's why there's an
+    // addFromBottom section.
+    const columns = allIndicesToRemove.map(
+      (indicesToRemove): ColumnAnimation => {
+        return { addFromBottom: [], addFromTop: [], indicesToRemove };
+      }
+    );
+    /**
+     * The first index is the row number, the second is the column number.
+     *
+     * This will eventually be returned as a LogicalBoard, but for now
+     * none of the arrays are read only.
+     */
+    const final = initializedArray(
+      LogicalBoard.SIZE,
+      () => new Array<Piece>(LogicalBoard.SIZE)
+    );
+    columns.forEach((columnAnimation, columnIndex) => {
+      const indicesToRemove = allIndicesToRemove[columnIndex];
+      const newColumn: Piece[] = [];
+      for (
+        let originalRowIndex = 0;
+        originalRowIndex < LogicalBoard.SIZE;
+        originalRowIndex++
+      ) {
+        if (!indicesToRemove.has(originalRowIndex)) {
+          newColumn.push(this.allPieces[originalRowIndex][columnIndex]);
+        }
+      }
+      while (newColumn.length < LogicalBoard.SIZE) {
+        const newPiece = LogicalBoard.randomPiece();
+        columnAnimation.addFromTop.push(newPiece);
+        newColumn.unshift(newPiece);
+      }
+      newColumn.forEach(
+        (piece, finalRowIndex) => (final[finalRowIndex][columnIndex] = piece)
+      );
+    });
+    return { columns, final: new LogicalBoard(final) };
+  }
 }
 
 type ColumnAnimation = {
   addFromTop: Piece[];
   addFromBottom: Piece[];
-  indicesToRemove: Iterable<number>;
+  indicesToRemove: Set<number>;
 };
-
-function compileAnimation(
-  initialBoard: LogicalBoard,
-  groupsToRemove: Group[]
-): {
-  columns: ColumnAnimation[];
-  final: AllPieces;
-} {
-  /**
-   * The array index is the column number.
-   * The entries in each set are the row numbers.
-   */
-  const allIndicesToRemove = initializedArray(
-    LogicalBoard.SIZE,
-    () => new Set<number>()
-  );
-  groupsToRemove.forEach((group) => {
-    group.contents.forEach(({ row, column }) => {
-      const set = allIndicesToRemove[column];
-      if (set.has(row)) {
-        throw new Error("wtf"); // Duplicate.
-      }
-      set.add(row);
-    });
-  });
-  // Note this implementation is a bit simple.  Eventually we will
-  // need to deal with 2⨉2 chuzzle pieces.  That's why there's an
-  // addFromBottom section.
-  const columns = allIndicesToRemove.map((indicesToRemove): ColumnAnimation => {
-    const addFromTop = initializedArray(
-      indicesToRemove.size,
-      LogicalBoard.randomPiece
-    );
-    return { addFromBottom: [], addFromTop, indicesToRemove };
-  });
-  /**
-   * The first index is the row number, the second is the column number.
-   *
-   * This will eventually be returned as a AllPieces, but for now
-   * none of the arrays are read only.
-   */
-  const final = initializedArray(
-    LogicalBoard.SIZE,
-    () => new Array<Piece>(LogicalBoard.SIZE)
-  );
-  columns.forEach((columnAnimation, columnIndex) => {
-    const indicesToRemove = allIndicesToRemove[columnIndex];
-    const newColumn: Piece[] = [];
-    for (
-      let originalRowIndex = 0;
-      originalRowIndex < LogicalBoard.SIZE;
-      originalRowIndex++
-    ) {
-      if (!indicesToRemove.has(originalRowIndex)) {
-        newColumn.push(initialBoard.allPieces[columnIndex][originalRowIndex]);
-      }
-    }
-    while (newColumn.length < LogicalBoard.SIZE) {
-      const newPiece = LogicalBoard.randomPiece();
-      columnAnimation.addFromTop.push(newPiece);
-      newColumn.unshift(newPiece);
-    }
-    newColumn.forEach(
-      (piece, finalRowIndex) => (final[finalRowIndex][columnIndex] = piece)
-    );
-  });
-  return { columns, final };
-}
 
 class GUI {
   private constructor() {
@@ -549,9 +558,7 @@ class GUI {
   static set currentBoard(newBoard: LogicalBoard) {
     this.#currentBoard = newBoard;
     this.draw();
-    this.hideTemporaries();
   }
-  private static hideTemporaries(): void {}
   static readonly #backgroundColors: ReadonlyMap<
     string,
     ReadonlyArray<string>
@@ -742,13 +749,18 @@ class GUI {
     );
   }
   private static resetAll() {
-    this.#currentlyVisible.forEach((row) => {
-      row.forEach((piece) => {
-        piece.remove();
-      });
-    });
+    GuiPiece.removeAll();
     this.#currentlyVisible = [];
-    this.hideTemporaries();
+  }
+  static animationOptions(needToMove: number): KeyframeAnimationOptions {
+    /**
+     * Four seconds if you go all the way across the board.
+     */
+    const duration = (Math.abs(needToMove) * 4000) / LogicalBoard.SIZE;
+    return {
+      duration,
+      easing: "ease-in-out",
+    };
   }
   /**
    * Set up the event handlers.
@@ -1035,15 +1047,8 @@ class GUI {
           LogicalBoard.SIZE
         ) -
         LogicalBoard.SIZE / 2;
-      /**
-       * Two seconds at most.  That's to go half way.
-       * We never go more than half way!
-       */
-      const duration = (Math.abs(needToMove) * 4000) / LogicalBoard.SIZE;
-      const options: KeyframeAnimationOptions = {
-        duration,
-        easing: "ease-in-out",
-      };
+      const options: KeyframeAnimationOptions =
+        GUI.animationOptions(needToMove);
       /**
        * How should a `GuiPiece` move?
        * This takes care of the fact that some pieces will wrap around.
@@ -1139,12 +1144,9 @@ class GUI {
       dragState = "animation";
 
       if (promises.length > 0) {
-        this.#currentBoard = newBoard;
-        this.#currentlyVisible = this.#currentBoard.allPieces.map((row) =>
-          row.map((piece) => GuiPiece.for(piece))
-        );
         await Promise.all(promises);
         promises.length = 0;
+        this.currentBoard = newBoard;
       }
       possibleMoves = undefined;
 
@@ -1154,8 +1156,8 @@ class GUI {
         if (groups.length == 0) {
           break;
         }
-        const { columns, final } = compileAnimation(this.currentBoard, groups);
-        final; // TODO actually use this!!!!
+        const { columns, final } = this.currentBoard.compileAnimation(groups);
+        // Move the old pieces out of the way.
         columns.forEach((columnAnimation, columnIndex) => {
           for (const rowIndex of columnAnimation.indicesToRemove) {
             const guiPiece = this.#currentlyVisible[rowIndex][columnIndex];
@@ -1168,79 +1170,61 @@ class GUI {
             );
           }
         });
-        break;
+        await Promise.all(promises);
+        promises.length = 0;
+        // Move the new pieces onto the board.
+        columns.forEach(
+          ({ addFromTop, addFromBottom, indicesToRemove }, columnIndex) => {
+            if (addFromBottom.length > 0) {
+              throw new Error("Not implemented yet.");
+            }
+            if (
+              addFromBottom.length + addFromTop.length !=
+              indicesToRemove.size
+            ) {
+              throw new Error("wtf");
+            }
+            let needToMove = addFromTop.length;
+            const options = GUI.animationOptions(needToMove);
+            addFromTop.forEach((piece, index) => {
+              const guiPiece = new GuiPiece(piece);
+              const initialRow = -(index + 1);
+              const finalRow = initialRow + needToMove;
+              guiPiece.setPosition(initialRow, columnIndex);
+              promises.push(
+                guiPiece.animateMove(finalRow, columnIndex, options)
+              );
+            });
+            this.currentBoard
+              .getColumn(columnIndex)
+              .forEach((piece, initialRowIndex) => {
+                if (indicesToRemove.has(initialRowIndex)) {
+                  needToMove--;
+                } else if (needToMove) {
+                  const guiPiece = GuiPiece.for(piece);
+                  guiPiece.animateMove(
+                    initialRowIndex + needToMove,
+                    columnIndex,
+                    options
+                  );
+                }
+              });
+          }
+        );
+        await Promise.all(promises);
+        promises.length = 0;
+        this.currentBoard = final;
+        break; // TODO keep the loop going.  Add some delays and and some flashing letters so the player can see what's going on.
       }
-      await Promise.all(promises);
       board.style.cursor = "";
       dragState = "none";
     });
   })();
 }
+GUI;
 
 /**
  * The first index is the row number.
  * The second index is the column number.
  */
 type AllGroupHolders = ReadonlyArray<ReadonlyArray<GroupHolder>>;
-
-// Debug only
-
-(window as any).checkGroups = () => {
-  const groups = GroupHolder.findActionable(GUI.currentBoard.allPieces);
-  console.log(groups);
-};
-
-// Debug stuff.  All of the functions below will automatically be called by the GUI.
-// This allows me to test the functions in isolation,
-// and to test them before the GUI is ready.
-
-(window as any).rotateLeft = (rowNumber: number, by: number) => {
-  GUI.currentBoard = GUI.currentBoard.rotateLeft(rowNumber, by);
-};
-
-(window as any).rotateUp = (columnNumber: number, by: number) => {
-  GUI.currentBoard = GUI.currentBoard.rotateUp(columnNumber, by);
-};
-
-// This is a nice way to view the events.
-// But I'm not working on that right now and this display can be distracting.
-/*
-{
-  const eventNames = [
-    "pointerover",
-    "pointerenter",
-    "pointerdown",
-    "pointermove",
-    "pointerup",
-    "pointercancel",
-    "pointerout",
-    "pointerleave",
-    "gotpointercapture",
-    "lostpointercapture",
-  ] as const;
-  const allEventsContainer = document.createElement("div");
-  document.body.appendChild(allEventsContainer);
-  const svgElement = document.querySelector("svg")!;
-  eventNames.forEach((eventName) => {
-    let eventElement = document.createElement("div");
-    eventElement.innerText = eventName;
-    eventElement.style.color = "lightgrey";
-    allEventsContainer.appendChild(eventElement);
-    let firstTime = false;
-    svgElement.addEventListener(eventName, (pointerEvent) => {
-      if (firstTime) {
-        console.log(eventName, pointerEvent, eventElement);
-        firstTime = false;
-      }
-      eventElement.remove();
-      eventElement = document.createElement("div");
-      eventElement.innerText = eventName;
-      eventElement.classList.add("event-fired");
-      allEventsContainer.insertBefore(
-        eventElement,
-        allEventsContainer.firstElementChild
-      );
-    });
-  });
-}
-*/
