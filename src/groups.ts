@@ -1,5 +1,5 @@
 /**
- * This file exports findActionable() and hides a lot of the details. 
+ * This file exports findActionable() and hides a lot of the details.
  */
 
 import { Color, LogicalBoard, Piece } from "./logical-board";
@@ -8,13 +8,13 @@ import { Color, LogicalBoard, Piece } from "./logical-board";
  * A list of pieces that are all the same color and adjacent.
  */
 export class Group {
-  #contents = new Set<GroupHolder>();
-  get contents(): ReadonlySet<GroupHolder> {
+  #contents = new Set<GroupCell>();
+  get contents(): ReadonlySet<GroupCell> {
     return this.#contents;
   }
   static #nextDebugId = 0;
   #debugId = Group.#nextDebugId++;
-  readonly debugInitialGroup: GroupHolder;
+  readonly debugInitialGroup: GroupCell;
   /**
    * This is aimed at console.log() or console.table().
    * The format is likely to change.
@@ -28,7 +28,7 @@ export class Group {
     };
   }
   readonly color: Color;
-  constructor(initialContents: GroupHolder) {
+  constructor(initialContents: GroupCell) {
     this.color = initialContents.color;
     this.debugInitialGroup = initialContents;
     this.#contents.add(initialContents);
@@ -50,22 +50,20 @@ export class Group {
   }
 }
 
-
 /**
  * The first index is the row number.
  * The second index is the column number.
  */
-type AllGroupHolders = ReadonlyArray<ReadonlyArray<GroupHolder>>;
-
+type AllGroupCells = ReadonlyArray<ReadonlyArray<GroupCell>>;
 
 /**
  * A lot of the data in this program is readonly.
- * GroupHolder has values that can be modified.
+ * GroupCell has values that can be modified.
  * This is required internally by the algorithm that finds colors that are touching.
  *
- * There is exactly one GroupHolder per cell.
+ * There is exactly one GroupCell per cell.
  */
-class GroupHolder {
+class GroupCell {
   /**
    * The group currently associated with this cell.
    * This can change frequently.
@@ -89,10 +87,10 @@ class GroupHolder {
    * @param allPieces What we want to show.
    * @returns The GUI that we are using to show it.
    */
-  private static createAll(logicalBoard : LogicalBoard): AllGroupHolders {
+  private static createAll(logicalBoard: LogicalBoard): AllGroupCells {
     return logicalBoard.allPieces.map((row, rowNumber) =>
       row.map(
-        (piece, columnNumber) => new GroupHolder(rowNumber, columnNumber, piece)
+        (piece, columnNumber) => new GroupCell(rowNumber, columnNumber, piece)
       )
     );
   }
@@ -100,7 +98,7 @@ class GroupHolder {
    * Combine two groups, if they contain the same color pieces.
    * @param other Another group which is adjacent to `this` group.
    */
-  private tryCombine(other: GroupHolder) {
+  private tryCombine(other: GroupCell) {
     if (this.#group != other.#group && this.color == other.color) {
       /**
        * `this` group will grow to contain each member of the
@@ -111,9 +109,9 @@ class GroupHolder {
        * the other group.
        */
       const allChanged = this.#group.consume(other.#group);
-      // Update the GroupHolder objects.
+      // Update the GroupCell objects.
       // Everything that was in the `other` group is now in `this` group.
-      // (Each GroupHolder points to its Group, and each Group points to all of its Group objects.)
+      // (Each GroupCell points to its Group, and each Group points to all of its Group objects.)
       allChanged.forEach((changed) => (changed.#group = this.#group));
       if (!this.#group.valid) {
         throw new Error("wtf");
@@ -122,38 +120,37 @@ class GroupHolder {
   }
   /**
    * Find all pieces that are touching and have the same color.
-   * @param groupHolders  Comes from createAll().
+   * @param groupCells  Comes from createAll().
    * This function modifies this parameter to show which pieces are touching other pieces of the same color.
    */
-  private static combineAll(groupHolders: AllGroupHolders) {
-    groupHolders.forEach((row, rowNumber) => {
-      row.forEach((groupHolder, columnNumber) => {
+  private static combineAll(groupCells: AllGroupCells) {
+    groupCells.forEach((row, rowNumber) => {
+      row.forEach((groupCell, columnNumber) => {
         if (rowNumber) {
           // Check the current piece against the piece above it.
           const previousRowNumber = rowNumber - 1;
-          const otherGroupHolder =
-            groupHolders[previousRowNumber][columnNumber];
-          groupHolder.tryCombine(otherGroupHolder);
+          const otherGroupCell = groupCells[previousRowNumber][columnNumber];
+          groupCell.tryCombine(otherGroupCell);
         }
         if (columnNumber) {
           // Check the current piece against the piece to its left.
           const previousColumnNumber = columnNumber - 1;
-          const otherGroupHolder = row[previousColumnNumber];
-          groupHolder.tryCombine(otherGroupHolder);
+          const otherGroupCell = row[previousColumnNumber];
+          groupCell.tryCombine(otherGroupCell);
         }
       });
     });
   }
   /**
    * Find all pieces that need to be removed from the board.
-   * @param groupHolders Comes from combineAll().
+   * @param groupCells Comes from combineAll().
    * @returns A list of groups with 3 or more Pieces.
    */
-  private static findBigGroups(groupHolders: AllGroupHolders) {
+  private static findBigGroups(groupCells: AllGroupCells) {
     const countByGroup = new Map<Group, number>();
-    groupHolders.forEach((row) =>
-      row.forEach((groupHolder) => {
-        const group = groupHolder.#group;
+    groupCells.forEach((row) =>
+      row.forEach((groupCell) => {
+        const group = groupCell.#group;
         const previousCount = countByGroup.get(group) ?? 0;
         countByGroup.set(group, previousCount + 1);
       })
@@ -171,13 +168,13 @@ class GroupHolder {
    * @param allPieces The current state of the board.
    * @returns A list of all groups of pieces which can be removed.
    */
-  static findActionable(logicalBoard : LogicalBoard): Group[] {
-    const allGroupHolders = this.createAll(logicalBoard);
-    this.combineAll(allGroupHolders);
-    return this.findBigGroups(allGroupHolders);
+  static findActionable(logicalBoard: LogicalBoard): Group[] {
+    const allGroupCells = this.createAll(logicalBoard);
+    this.combineAll(allGroupCells);
+    return this.findBigGroups(allGroupCells);
   }
 }
 
-export function findActionable(logicalBoard : LogicalBoard): Group[] {
-  return GroupHolder.findActionable(logicalBoard);
+export function findActionable(logicalBoard: LogicalBoard): Group[] {
+  return GroupCell.findActionable(logicalBoard);
 }

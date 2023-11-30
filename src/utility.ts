@@ -1,8 +1,8 @@
 /**
  * This file contains code that is not specific to this project in any way
  * and could be reused by a lot of other projects.
- * 
- * It might make sense to move these to phil-lib.
+ *
+ * It might make sense to move some or all of this to phil-lib.
  */
 
 /**

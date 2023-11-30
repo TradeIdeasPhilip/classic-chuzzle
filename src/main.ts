@@ -1,5 +1,11 @@
 import "./style.css";
-import { assertClass, initializedArray, makeLinear, pick } from "phil-lib/misc";
+import {
+  assertClass,
+  initializedArray,
+  makeLinear,
+  pick,
+  sleep,
+} from "phil-lib/misc";
 import { getById } from "phil-lib/client-misc";
 import { LogicalBoard, Piece } from "./logical-board";
 import { Group, findActionable } from "./groups";
@@ -24,6 +30,34 @@ import { positiveModulo } from "./utility";
  * I separated GuiPiece from Piece in case the GUI changed.
  */
 class GuiPiece {
+  static flashGroupDecorations(groups: Group[]) {
+    groups.forEach((group) => {
+      const pieces: readonly GuiPiece[] = [...group.contents].map((groupCell) =>
+        GuiPiece.for(groupCell.piece)
+      );
+      const maxOpacity = 1;
+      const minOpacity = Math.random() * 0.2 + 0.05;
+      const keyframes: Keyframe[] = [
+        { opacity: minOpacity },
+        { opacity: maxOpacity },
+      ];
+      const options: KeyframeAnimationOptions = {
+        direction: pick([
+          "alternate",
+          "alternate-reverse",
+          "normal",
+          "reverse",
+        ]),
+        duration: 500 + Math.random() * 250,
+        easing: pick(["linear", "ease-in", "ease-out", "ease-in-out"]),
+        iterationStart: Math.random(),
+        iterations: Infinity,
+      };
+      pieces.forEach((piece) => {
+        piece.decorationElement.animate(keyframes, options);
+      });
+    });
+  }
   static removeAll() {
     this.#board.innerHTML = "";
   }
@@ -36,6 +70,7 @@ class GuiPiece {
     HTMLTemplateElement
   ).content.querySelector("g")!;
   readonly element: SVGGElement;
+  readonly decorationElement: SVGTextElement;
 
   static readonly #positionColumn = CSS.px(Math.E);
   static readonly #positionRow = CSS.px(Math.PI);
@@ -97,6 +132,7 @@ class GuiPiece {
       SVGGElement
     );
     this.element = clone;
+    this.decorationElement = clone.querySelector("text")!;
     clone.setAttribute("fill", piece.color);
     GuiPiece.#board.appendChild(clone);
   }
@@ -276,22 +312,30 @@ class GUI {
    * screen.
    * @param
    */
-  private showGroups(board: LogicalBoard) {
-    const groups = findActionable(board);
-    if (groups.length > 0) {
+  private showGroupsDeferred(groups: Group[]) {
+    if (groups.length == 0) {
+      // This is a minor optimization.  Mostly I didn't want to
+      // make a copy of decorations unless I needed to.
+      return () => {};
+    } else {
+      const tasks: (() => void)[] = [];
       const decorations = [...GUI.#decorations];
       groups.forEach((group) => {
         const decorationColor = pick(GUI.#backgroundColors.get(group.color)!);
         const decorationIndex = Math.floor(Math.random() * decorations.length);
         const decorationText = decorations[decorationIndex];
         decorations.splice(decorationIndex, 1);
-        group.contents.forEach((groupHolder) => {
-          const gElement = GuiPiece.for(groupHolder.piece).element;
-          const textElement = gElement.querySelector("text")!;
-          textElement.textContent = decorationText;
-          textElement.style.fill = decorationColor;
+        tasks.push(() => {
+          group.contents.forEach((groupCell) => {
+            const decorationElement = GuiPiece.for(
+              groupCell.piece
+            ).decorationElement;
+            decorationElement.textContent = decorationText;
+            decorationElement.style.fill = decorationColor;
+          });
         });
       });
+      return () => tasks.forEach((task) => task());
     }
   }
   /**
@@ -455,7 +499,11 @@ class GUI {
      * `groups` is a list of groups to highlight as the user passes through this state, and to delete if the user lets go here.
      */
     let possibleMoves:
-      | { readonly board: LogicalBoard; readonly groups: Group[] }[]
+      | {
+          readonly board: LogicalBoard;
+          readonly groups: Group[];
+          showGroups(): void;
+        }[]
       | undefined;
     /**
      * Which row or column we are closest to.
@@ -503,7 +551,8 @@ class GUI {
         possibleMoves = initializedArray(LogicalBoard.SIZE, (by) => {
           const board = this.#currentBoard[translate](fixedIndex, by);
           const groups = findActionable(board);
-          return { board, groups };
+          const showGroups = this.showGroupsDeferred(groups);
+          return { board, groups, showGroups };
         });
         previewOffset = 0;
       }
@@ -538,10 +587,7 @@ class GUI {
         if (newPreviewOffset != previewOffset) {
           previewOffset = newPreviewOffset;
           this.removeGroups();
-          //   Clear the relevant timer, if one is active.
-          //   Set a new timer for 250 ms,
-          //   Store the timer's id in case we need to cancel it.
-          this.showGroups(possibleMoves[previewOffset].board);
+          possibleMoves[previewOffset].showGroups();
         }
       }
     });
@@ -719,11 +765,14 @@ class GUI {
       possibleMoves = undefined;
 
       // Remove some pieces from the board because the colors matched matched.
-      while (true) {
-        const groups = findActionable(this.currentBoard);
+      let { groups, showGroups } = moves;
+      while (groups.length > 0) {
         if (groups.length == 0) {
           break;
         }
+        showGroups();
+        GuiPiece.flashGroupDecorations(groups);
+        await sleep(2000);
         const { columns, final } = this.currentBoard.compileAnimation(groups);
         // Move the old pieces out of the way.
         columns.forEach((columnAnimation, columnIndex) => {
@@ -782,11 +831,12 @@ class GUI {
         await Promise.all(promises);
         promises.length = 0;
         this.currentBoard = final;
-        break; // TODO keep the loop going.  Add some delays and and some flashing letters so the player can see what's going on.
+        groups = findActionable(final);
+        showGroups = this.showGroupsDeferred(groups);
       }
       board.style.cursor = "";
       dragState = "none";
     });
   }
 }
-new GUI;
+new GUI();
