@@ -48,7 +48,7 @@ class GuiPiece {
           "normal",
           "reverse",
         ]),
-        duration: 500 + Math.random() * 250,
+        duration: 550 + Math.random() * 150,
         easing: pick(["linear", "ease-in", "ease-out", "ease-in-out"]),
         iterationStart: Math.random(),
         iterations: Infinity,
@@ -116,12 +116,6 @@ class GuiPiece {
       ],
       options
     );
-    /*
-    console.log(
-      `translate(${initialColumn}px, ${initialRow}px)`,
-      `translate(${column}px, ${row}px)`
-    );
-    */
     return animation.finished;
   }
   static readonly #BACK_LINK = Symbol("GuiPiece");
@@ -366,12 +360,12 @@ class GUI {
   }
   static animationOptions(needToMove: number): KeyframeAnimationOptions {
     /**
-     * Four seconds if you go all the way across the board.
+     * Two seconds if you go all the way across the board.
      */
-    const duration = (Math.abs(needToMove) * 4000) / LogicalBoard.SIZE;
+    const duration = (Math.abs(needToMove) * 2000) / LogicalBoard.SIZE;
     return {
       duration,
-      easing: "ease-in-out",
+      //easing: "ease-in-out",
     };
   }
   /**
@@ -608,7 +602,7 @@ class GUI {
         return;
       }
 
-      board.style.cursor = "wait";
+      board.style.cursor = "none";
 
       /**
        * The program typically starts multiple animations at the same time.
@@ -719,7 +713,6 @@ class GUI {
         offset.push(1.0);
         return { position, offset, finalPosition };
       };
-      //console.log({ needToMove, duration });
       if (dragState == "horizontal") {
         const row = this.#currentlyVisible[fixedIndex];
         row.forEach((guiPiece) => {
@@ -734,7 +727,6 @@ class GUI {
           promises.push(
             guiPiece.element.animate({ transform, offset }, options).finished
           );
-          //console.log({ transform, offset });
           guiPiece.setPosition(fixedIndex, finalColumnPosition);
         });
       } else if (dragState == "vertical") {
@@ -778,12 +770,55 @@ class GUI {
         columns.forEach((columnAnimation, columnIndex) => {
           for (const rowIndex of columnAnimation.indicesToRemove) {
             const guiPiece = this.#currentlyVisible[rowIndex][columnIndex];
+            /**
+             * Where `guiPiece` will land at the end of the animation.
+             */
+            let finalRowIndex: number;
+            /**
+             * Where `guiPiece` will land at the end of the animation.
+             */
+            let finalColumnIndex: number;
+            // Pick a spot completely contained in the top left quarter of the board.
+            finalRowIndex = Math.random() * (LogicalBoard.SIZE / 2 - 1);
+            finalColumnIndex = Math.random() * (LogicalBoard.SIZE / 2 - 1);
+            {
+              // Move the final point off of the board.
+              /**
+               * * ⅓ chance of moving directly up.
+               * * ⅓ chance of moving directly left.
+               * * ⅓ chance of moving up and left.
+               */
+              const r = Math.random() * 3;
+              if (r > 1) {
+                finalRowIndex -= LogicalBoard.SIZE / 2;
+              }
+              if (r < 2) {
+                finalColumnIndex -= LogicalBoard.SIZE / 2;
+              }
+            }
+            {
+              // Optionally flip the final position over the x axis and/or the y axis.
+              // This will ensure that we have coverage in all directions.
+              /**
+               * This is random but weighted.  It will prefer longer moves.
+               * For example, the closer the initial position is to the top, the more likely the final position will be below the bottom.
+               * @param initial The starting index in one dimension or the other, in SVG units.
+               * @returns `true` if the final position should be flipped.
+               */
+              const needToFlip = (initial: number) =>
+                Math.random() > (initial + 1) / (LogicalBoard.SIZE + 1);
+              if (needToFlip(rowIndex)) {
+                finalRowIndex = LogicalBoard.SIZE - finalRowIndex - 1;
+              }
+              if (needToFlip(columnIndex)) {
+                finalColumnIndex = LogicalBoard.SIZE - finalColumnIndex - 1;
+              }
+            }
             promises.push(
-              guiPiece.animateMove(
-                LogicalBoard.SIZE * 1.5 + Math.random() * 2,
-                Math.random() * LogicalBoard.SIZE,
-                { duration: 1000, easing: "ease-in" }
-              )
+              guiPiece.animateMove(finalRowIndex, finalColumnIndex, {
+                duration: 1000,
+                easing: "ease-in",
+              })
             );
           }
         });
