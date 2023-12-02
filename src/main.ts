@@ -19,6 +19,12 @@ import { positiveModulo } from "./utility";
   }, 1000);
 }
 
+type DecoratedGroups = {
+  readonly group: Group;
+  readonly decorationColor: string;
+  readonly decorationText: string;
+}[];
+
 /**
  * One of these for each piece on the board.
  * These objects own the DOM Element objects.
@@ -145,9 +151,22 @@ class GuiPiece {
     // objects.
     return result;
   }
+  static showGroups(decoratedGroups: DecoratedGroups) {
+    decoratedGroups.forEach(({ group, decorationColor, decorationText }) => {
+      group.contents.forEach((groupCell) => {
+        const decorationElement = GuiPiece.for(
+          groupCell.piece
+        ).decorationElement;
+        decorationElement.textContent = decorationText;
+        decorationElement.style.fill = decorationColor;
+      });
+    });
+  }
 }
 
 class GUI {
+  static readonly #newScoreDiv = getById("newScore", HTMLDivElement);
+  static readonly #chainBonusDiv = getById("chainBonus", HTMLDivElement);
   #currentlyVisible: GuiPiece[][] = [];
   #currentBoard: LogicalBoard = LogicalBoard.createRandom();
   get currentBoard(): LogicalBoard {
@@ -306,30 +325,20 @@ class GUI {
    * screen.
    * @param
    */
-  private showGroupsDeferred(groups: Group[]) {
+  private static assignGroupDecorations(groups: Group[]) {
     if (groups.length == 0) {
       // This is a minor optimization.  Mostly I didn't want to
       // make a copy of decorations unless I needed to.
-      return () => {};
+      return [];
     } else {
-      const tasks: (() => void)[] = [];
-      const decorations = [...GUI.#decorations];
-      groups.forEach((group) => {
-        const decorationColor = pick(GUI.#backgroundColors.get(group.color)!);
+      const decorations = [...this.#decorations];
+      return groups.map((group) => {
+        const decorationColor = pick(this.#backgroundColors.get(group.color)!);
         const decorationIndex = Math.floor(Math.random() * decorations.length);
         const decorationText = decorations[decorationIndex];
         decorations.splice(decorationIndex, 1);
-        tasks.push(() => {
-          group.contents.forEach((groupCell) => {
-            const decorationElement = GuiPiece.for(
-              groupCell.piece
-            ).decorationElement;
-            decorationElement.textContent = decorationText;
-            decorationElement.style.fill = decorationColor;
-          });
-        });
+        return { group, decorationColor, decorationText };
       });
-      return () => tasks.forEach((task) => task());
     }
   }
   /**
@@ -495,8 +504,7 @@ class GUI {
     let possibleMoves:
       | {
           readonly board: LogicalBoard;
-          readonly groups: Group[];
-          showGroups(): void;
+          readonly decoratedGroups: DecoratedGroups;
         }[]
       | undefined;
     /**
@@ -544,9 +552,10 @@ class GUI {
         const translate = dragState == "vertical" ? "rotateUp" : "rotateLeft";
         possibleMoves = initializedArray(LogicalBoard.SIZE, (by) => {
           const board = this.#currentBoard[translate](fixedIndex, by);
-          const groups = findActionable(board);
-          const showGroups = this.showGroupsDeferred(groups);
-          return { board, groups, showGroups };
+          const decoratedGroups = GUI.assignGroupDecorations(
+            findActionable(board)
+          );
+          return { board, decoratedGroups };
         });
         previewOffset = 0;
       }
@@ -581,7 +590,7 @@ class GUI {
         if (newPreviewOffset != previewOffset) {
           previewOffset = newPreviewOffset;
           this.removeGroups();
-          possibleMoves[previewOffset].showGroups();
+          GuiPiece.showGroups(possibleMoves[previewOffset].decoratedGroups);
         }
       }
     });
@@ -633,7 +642,7 @@ class GUI {
        */
       const moves = possibleMoves[offset];
       const { newBoard, newOffset } =
-        moves.groups.length == 0
+        moves.decoratedGroups.length == 0
           ? {
               newBoard: this.currentBoard,
               newOffset: 0,
@@ -757,12 +766,33 @@ class GUI {
       possibleMoves = undefined;
 
       // Remove some pieces from the board because the colors matched matched.
-      let { groups, showGroups } = moves;
-      while (groups.length > 0) {
-        if (groups.length == 0) {
-          break;
+      let { decoratedGroups } = moves;
+      let chainBonus = 1;
+      while (decoratedGroups.length > 0) {
+        if (chainBonus < 2) {
+          GUI.#chainBonusDiv.innerHTML = "";
+        } else {
+          GUI.#chainBonusDiv.innerText = `Chain Bonus: ⨉ ${chainBonus}`;
         }
-        showGroups();
+        chainBonus++;
+        GUI.#newScoreDiv.innerHTML = "";
+        decoratedGroups.forEach(
+          ({ group, decorationText, decorationColor }, index) => {
+            if (index > 0) {
+              GUI.#newScoreDiv.append(" + ");
+            }
+            const span = document.createElement("span");
+            span.innerText = `${decorationText} ${group.contents.size}`;
+            span.style.color = decorationColor;
+            span.style.borderColor = span.style.backgroundColor = group.color;
+            span.classList.add("individualScore");
+            GUI.#newScoreDiv.appendChild(span);
+          }
+        );
+        GuiPiece.showGroups(decoratedGroups);
+        const groups = decoratedGroups.map(
+          (decoratedGroup) => decoratedGroup.group
+        );
         GuiPiece.flashGroupDecorations(groups);
         await sleep(2000);
         const { columns, final } = this.currentBoard.compileAnimation(groups);
@@ -866,9 +896,10 @@ class GUI {
         await Promise.all(promises);
         promises.length = 0;
         this.currentBoard = final;
-        groups = findActionable(final);
-        showGroups = this.showGroupsDeferred(groups);
+        decoratedGroups = GUI.assignGroupDecorations(findActionable(final));
       }
+      GUI.#newScoreDiv.innerHTML = "";
+      GUI.#chainBonusDiv.innerHTML = "";
       board.style.cursor = "";
       dragState = "none";
     });

@@ -25,3 +25,21 @@ div.cell-phone-warning {
   pointer-events: none;
   user-select: none;
 }
+
+#scoreboard {
+  margin-top: 0.8em;
+}
+
+.individualScore {
+  padding-left: 0.4em;
+  padding-right: 0.4em;
+  padding-top: 0.2em;
+  padding-bottom: 0.2em;
+  border-radius: 0.75em;
+  font-size: 150%;
+}
+
+#chainBonus {
+  font-size: 150%;
+  margin-top: 1em;
+}
