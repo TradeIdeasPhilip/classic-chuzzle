@@ -11,19 +11,56 @@
       Warning: This doesn't work on my phone.
     </div>
     <svg
-      id="board"
       style="
         height: 400px;
         width: 400px;
         max-height: 100vmin;
         max-width: 100vmin;
-        background-color: antiquewhite;
+        background-color: #808080;
         overflow: clip;
       "
       viewBox="0 0 6 6"
       xmlns="http://www.w3.org/2000/svg"
       stroke-width="0.1"
-    ></svg>
+    >
+      <defs>
+        <pattern
+          id="pattern_1"
+          patternUnits="userSpaceOnUse"
+          width="0.5"
+          height="0.5"
+        >
+          <line
+            x1="0"
+            y="0"
+            x2="0"
+            y2="0.5"
+            stroke="black"
+            stroke-width="0.07"
+          />
+        </pattern>
+        <pattern
+          id="pattern_2"
+          patternUnits="userSpaceOnUse"
+          width="0.643"
+          height="0.643"
+        >
+          <line
+            x1="0"
+            y="0"
+            x2="0"
+            y2="0.643"
+            stroke="white"
+            stroke-width="0.09"
+          />
+        </pattern>
+      </defs>
+      <g id="background">
+        <circle r="4.25" cx="3" cy="3" fill="url(#pattern_1)" />
+        <circle r="4.25" cx="3" cy="3" fill="url(#pattern_2)" />
+      </g>
+      <g id="board"></g>
+    </svg>
     <template id="piece">
       <svg xmlns="http://www.w3.org/2000/svg">
         <g fill="blue">

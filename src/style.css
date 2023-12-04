@@ -26,6 +26,10 @@ div.cell-phone-warning {
   user-select: none;
 }
 
+#background circle {
+  transform-origin: center;
+}
+
 #scoreboard {
   margin-top: 0.8em;
 }

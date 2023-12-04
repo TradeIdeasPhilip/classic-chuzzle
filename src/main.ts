@@ -19,6 +19,24 @@ import { positiveModulo } from "./utility";
   }, 1000);
 }
 
+{
+  const [black, white] = getById("background", SVGGElement).querySelectorAll(
+    "circle"
+  );
+  black.animate(
+    [{ transform: "rotate(720deg)" }, { transform: "rotate(0deg)" }],
+    { duration: 67973, easing: "ease", iterations: Infinity }
+  );
+  white.animate(
+    [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }],
+    {
+      duration: 19701,
+      easing: "cubic-bezier(0.42, 0, 0.32, 1.83)",
+      iterations: Infinity,
+    }
+  );
+}
+
 type DecoratedGroups = {
   readonly group: Group;
   readonly decorationColor: string;
