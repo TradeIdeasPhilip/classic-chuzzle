@@ -406,9 +406,7 @@ class GUI {
    */
   private removeGroups() {
     this.#currentlyVisible.forEach((row) =>
-      row.forEach(
-        (guiPiece) => (guiPiece.element.querySelector("text")!.textContent = "")
-      )
+      row.forEach((guiPiece) => (guiPiece.decorationElement.textContent = ""))
     );
   }
   private draw() {
@@ -442,6 +440,7 @@ class GUI {
    */
   constructor() {
     this.draw();
+    const svg = getById("main", SVGSVGElement);
     const board = getById("board", SVGElement);
     /**
      *
@@ -452,8 +451,11 @@ class GUI {
      * - Fractions are possible.
      * - Values can be off the board because the program does a mouse capture.
      */
-    function translateCoordinates(pointerEvent: PointerEvent) {
-      const rect = board.getBoundingClientRect();
+    function translateCoordinates(pointerEvent: PointerEvent): {
+      readonly row: number;
+      readonly column: number;
+    } {
+      const rect = svg.getBoundingClientRect();
       const yToRow = makeLinear(rect.top, 0, rect.bottom, LogicalBoard.SIZE);
       const xToColumn = makeLinear(rect.left, 0, rect.right, LogicalBoard.SIZE);
       return {
