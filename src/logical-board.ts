@@ -1,5 +1,10 @@
 /**
  * This file describes the logic of the game, with no reference to any specific GUI.
+ *
+ * This was a mistake.  It feels like I'm doing everything twice.  I should not have
+ * associated so much of the logic with the state of the board like this.  The LogicalBoard
+ * wants to share its current state, but the GUI want's to focus on the steps involved.
+ * It's a total mismatch.
  */
 
 import { initializedArray, pick } from "phil-lib/misc";
@@ -35,6 +40,7 @@ export type Piece = {
    * A placeholder.  Eventually I need to deal with 2⨉2 pieces.
    */
   readonly weight: number;
+  readonly bomb: boolean;
 };
 
 /**
@@ -65,7 +71,7 @@ export class LogicalBoard {
   }
 
   static randomPiece(): Piece {
-    return { weight: 1, color: pick(colors) };
+    return { weight: 1, color: pick(colors), bomb: false };
   }
   static createRandom(): LogicalBoard {
     // Start with completely random pieces.
@@ -95,6 +101,7 @@ export class LogicalBoard {
         pieces[row][column] = {
           color: pick(colors.filter((color) => !nearby.has(color))),
           weight: 1,
+          bomb: false,
         };
       });
     });

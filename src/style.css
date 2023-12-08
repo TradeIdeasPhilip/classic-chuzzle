@@ -47,3 +47,11 @@ div.cell-phone-warning {
   font-size: 150%;
   margin-top: 1em;
 }
+
+.help {
+  margin-left: 1em;
+  margin-right: 1em;
+  border-radius: 1em;
+  padding: 0.75em 1em;
+  text-align: justify;
+}
