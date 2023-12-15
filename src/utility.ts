@@ -28,6 +28,14 @@ export function positiveModulo(numerator: number, denominator: number) {
   }
 }
 
+/**
+ * Create a new array by rotating another array.
+ * @param input The initial array.
+ * @param by How many places to rotate left.
+ * Negative values mean to the right.
+ * This should be a 32 bit integer.
+ * 0 and large numbers are handled efficiently.
+ */
 export function rotateArray<T>(input: ReadonlyArray<T>, by: number) {
   if ((by | 0) != by) {
     throw new Error(`invalid input: ${by}`);
@@ -38,4 +46,37 @@ export function rotateArray<T>(input: ReadonlyArray<T>, by: number) {
   } else {
     return [...input.slice(by), ...input.slice(0, by)];
   }
+}
+
+// This assertClass() is a small improvement on the version in phil-lib.
+
+/**
+ * Cast an object to a type.
+ * Check the type at runtime.
+ * @param item Check the type of this item.
+ * @param ty The expected type.  This should be a class.
+ * @param notes This will be included in the error message.
+ * @returns item
+ * @throws If the item is not of the correct type, throw an `Error` with a detailed message.
+ */
+export function assertClass<T extends object, ARGS extends any[]>(
+  item: unknown,
+  ty: { new (...args: ARGS): T },
+  notes = "Assertion Failed."
+): T {
+  const failed = (typeFound: string) => {
+    throw new Error(
+      `${notes}  Expected type:  ${ty.name}.  Found type:  ${typeFound}.`
+    );
+  };
+  if (item === null) {
+    failed("null");
+  } else if (typeof item != "object") {
+    failed(typeof item);
+  } else if (!(item instanceof ty)) {
+    failed(item.constructor.name);
+  } else {
+    return item;
+  }
+  throw new Error("wtf");
 }

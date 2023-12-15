@@ -2,35 +2,32 @@
  * This file exports findActionable() and hides a lot of the details.
  */
 
-import { Color, LogicalBoard, Piece } from "./logical-board";
+import { AllPieces, Color, Piece } from "./logical-board";
+
+/**
+ * This is all we really need from the Piece class.
+ */
+type HasColor = { readonly color:Color};
 
 /**
  * A list of pieces that are all the same color and adjacent.
  */
-export class Group {
+class Group {
   #contents = new Set<GroupCell>();
-  get contents(): ReadonlySet<GroupCell> {
-    return this.#contents;
-  }
-  static #nextDebugId = 0;
-  #debugId = Group.#nextDebugId++;
-  readonly debugInitialGroup: GroupCell;
   /**
-   * This is aimed at console.log() or console.table().
-   * The format is likely to change.
+   * This creates a new array on each call.
    */
-  debugInfo() {
-    return {
-      row: this.debugInitialGroup.row,
-      column: this.debugInitialGroup.column,
-      contents: this.valid ? this.#contents.size : "invalid",
-      id: this.#debugId,
-    };
+  get contents() {
+    return [...this.#contents].map((cell) => cell.piece);
   }
+  get size() {
+    return this.#contents.size;
+  }
+  readonly debugInitialCell: GroupCell;
   readonly color: Color;
   constructor(initialContents: GroupCell) {
     this.color = initialContents.color;
-    this.debugInitialGroup = initialContents;
+    this.debugInitialCell = initialContents;
     this.#contents.add(initialContents);
   }
   /**
@@ -46,7 +43,7 @@ export class Group {
     return result;
   }
   get valid(): boolean {
-    return !!this.#contents?.has(this.debugInitialGroup);
+    return !!this.#contents?.has(this.debugInitialCell);
   }
 }
 
@@ -57,11 +54,8 @@ export class Group {
 type AllGroupCells = ReadonlyArray<ReadonlyArray<GroupCell>>;
 
 /**
- * A lot of the data in this program is readonly.
- * GroupCell has values that can be modified.
- * This is required internally by the algorithm that finds colors that are touching.
- *
  * There is exactly one GroupCell per cell.
+ * It points back to its current group.
  */
 class GroupCell {
   /**
@@ -69,11 +63,7 @@ class GroupCell {
    * This can change frequently.
    */
   #group: Group;
-  private constructor(
-    readonly row: number,
-    readonly column: number,
-    readonly piece: Piece
-  ) {
+  private constructor(readonly piece: HasColor) {
     // Initially we have one group per piece.
     this.#group = new Group(this);
   }
@@ -81,18 +71,12 @@ class GroupCell {
     return this.piece.color;
   }
   /**
-   * Show an entire board full of new pieces.
-   *
-   * This will replace the old GUI with the new GUI all at once, with no animations.
+   * Create a `GroupCell` for each piece.
    * @param allPieces What we want to show.
    * @returns The GUI that we are using to show it.
    */
-  private static createAll(logicalBoard: LogicalBoard): AllGroupCells {
-    return logicalBoard.allPieces.map((row, rowNumber) =>
-      row.map(
-        (piece, columnNumber) => new GroupCell(rowNumber, columnNumber, piece)
-      )
-    );
+  private static createAll(allPieces: readonly(readonly HasColor[])[]): AllGroupCells {
+    return allPieces.map((row) => row.map((piece) => new GroupCell(piece)));
   }
   /**
    * Combine two groups, if they contain the same color pieces.
@@ -168,13 +152,23 @@ class GroupCell {
    * @param allPieces The current state of the board.
    * @returns A list of all groups of pieces which can be removed.
    */
-  static findActionable(logicalBoard: LogicalBoard): Group[] {
-    const allGroupCells = this.createAll(logicalBoard);
+  static findActionable(allPieces: readonly(readonly HasColor[])[]): Group[] {
+    const allGroupCells = this.createAll(allPieces);
     this.combineAll(allGroupCells);
     return this.findBigGroups(allGroupCells);
   }
 }
 
-export function findActionable(logicalBoard: LogicalBoard): Group[] {
-  return GroupCell.findActionable(logicalBoard);
+/**
+ * Each entry in this array represents one group.
+ *
+ * Although this has the same type signature as `AllPieces`, these are
+ * both used in completely different ways.  For one thing, the arrays
+ * involved with `AllPieces` all have length of `LogicalBoard.SIZE`.
+ * The arrays involved with `Groups` are of all different sizes.
+ */
+export type Groups = ReadonlyArray<ReadonlyArray<Piece>>;
+
+export function findActionable(allPieces: AllPieces): Groups {
+  return GroupCell.findActionable(allPieces).map((group) => group.contents as Piece[]);
 }
