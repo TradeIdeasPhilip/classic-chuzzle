@@ -1,10 +1,20 @@
 /**
  * This file describes the logic of the game, with no reference to any specific GUI.
  *
- * This was a mistake.  It feels like I'm doing everything twice.  I should not have
- * associated so much of the logic with the state of the board like this.  The LogicalBoard
- * wants to share its current state, but the GUI want's to focus on the steps involved.
- * It's a total mismatch.
+ * This file is aware of the GUI, but there are strict interfaces between the inputs,
+ * this file, and the outputs.
+ *
+ * user-inputs.ts always initiates new actions.  Some actions are immediate and others
+ * return promises to `void`.  user-inputs.ts must `await` those promises,
+ * but otherwise it knows nothing about the state of this file or display-outputs.ts.
+ *
+ * This file sends requests to display-output.ts.  Some actions are immediate and others
+ * return promises to `void`.
+ *
+ * GuiPiece and LogicalPiece each have their own rowIndex and columnIndex.  That is
+ * useful when adding animations.  logical-board can focus on where a piece needs
+ * to move.  display-output knows for certain where the piece currently is.  These
+ * can update separately; you don't need any special coordination between the sides.
  */
 
 import { initializedArray, pick } from "phil-lib/misc";
@@ -22,19 +32,9 @@ const roundedOffset = (offset: number): number => {
 };
 
 /**
- * Useful when we display a `GuiPiece` partway off the board.
- * This attaches to piece to whichever side leaves more of the piece on the board.
- * @param change
- * @returns A value between -½ and LogicalBoard.SIZE - ½.
- */
-const wrap = (change: number) => {
-  return positiveModulo(change + 0.5, LogicalBoard.SIZE) - 0.5;
-};
-
-/**
- * Rotate a single row.  Like when the user drags a piece left or right.
+ * Rotate a single rowIndex.  Like when the user drags a piece left or right.
  * @param original Start from here.  Do not modify the `original` in any way.
- * @param rowNumber Which row to rotate.
+ * @param rowNumber Which rowIndex to rotate.
  * @param by How many places left to move each piece.
  * Positive numbers move to the left, and negative numbers move to the right.
  * Must be a 32 bit integer.
@@ -53,7 +53,9 @@ function rotateLeft(
     // No change.  Return the original.
     return original;
   } else {
-    return original.map((row) => (row == originalRow ? newRow : row));
+    return original.map((rowIndex) =>
+      rowIndex == originalRow ? newRow : rowIndex
+    );
   }
 }
 
@@ -80,9 +82,9 @@ function rotateUp(
     // No change.  Return the original.
     return original;
   } else {
-    return original.map((row, rowNumber) => {
-      // First, create a copy of the row, so we can modify the copy.
-      const result = [...row];
+    return original.map((rowIndex, rowNumber) => {
+      // First, create a copy of the rowIndex, so we can modify the copy.
+      const result = [...rowIndex];
       // Then update the item in the column that is rotating.
       result[columnNumber] =
         original[(rowNumber + by) % numberOfRows][columnNumber];
@@ -114,43 +116,32 @@ const colors: readonly Color[] = [
 /**
  * What is in each cell.
  */
-export class Piece {
-  async remove(): Promise<void> {
-    // This is a placeholder.  Presumably the GUI will want to override this method.
-  }
+export type Piece = {
+  readonly rowIndex: number;
+  readonly columnIndex: number;
+  readonly color: Color;
+  readonly bomb: boolean;
+};
+
+class LogicalPiece implements Piece {
   /**
    * A placeholder.  Eventually I need to deal with 2⨉2 pieces.
    */
   readonly weight = 1;
   #bomb = false;
-  isBomb() {
+  get bomb() {
     return this.#bomb;
   }
-  makeBomb() {
-    this.#bomb = true;
+  set bomb(value) {
+    this.#bomb = value;
   }
-  #row: number;
-  #column: number;
-  constructor(row: number, column: number, readonly color: Color) {
-    this.#row = row;
-    this.#column = column;
-  }
+  constructor(
+    public rowIndex: number,
+    public columnIndex: number,
+    readonly color: Color = LogicalPiece.randomColor()
+  ) {}
   static randomColor() {
     return pick(colors);
-  }
-  get row() {
-    return this.#row;
-  }
-  get column() {
-    return this.#column;
-  }
-  moveToImmediately(row: number, column: number) {
-    this.#row = row;
-    this.#column = column;
-  }
-  moveToAnimated(row: number, column: number): Promise<unknown> {
-    this.moveToImmediately(row, column);
-    return Promise.resolve();
   }
 }
 
@@ -172,13 +163,13 @@ export type PointerActions = {
 
 /**
  * This controls all of the groups on the screen at once.
- * 
- * One object controls an entire _group of groups_, to make sure two groups don't try to use the same decoration.
+ *
+ * One object controls an entire _group of groups_, to make sure two groups don't try to use the same decoration at the same time.
  */
 export type GroupGroupActions = {
   /**
    *  Called when we first start to collect the groups.  I.e. right before the pieces start flying off the board.
-   * @param counter How many times in a row we've collected a group since the user's last move.  1 for the first time,
+   * @param counter How many times in a rowIndex we've collected a group since the user's last move.  1 for the first time,
    * 2 for the second, etc.
    */
   addToScore(counter: number): Promise<void>;
@@ -192,18 +183,97 @@ export type GroupGroupActions = {
 };
 
 export type Animator = {
-  createPiece(row: number, column: number, color: Color): Piece;
-  rotateDown(column: readonly Piece[], offset: number): Promise<void>;
-  rotateRight(row: readonly Piece[], offset: number): Promise<void>;
-  assignGroupDecorations(
-    groups: ReadonlyArray<ReadonlyArray<Piece>>
-  ): GroupGroupActions;
+  /**
+   * Tell the GUI that we are going to use a new piece.  The GUI will
+   * create a square and display it based on the information in the piece.
+   * @param piece This is the LogicalPiece that we want to display.
+   * It is safe (and expected) for the GUI to use this object as a
+   * key in a `Map`.
+   */
+  initializePiece(piece: Piece): void;
+  /**
+   *
+   * @param piece The piece we are done with.
+   *
+   * This object will never be used again.  The GUI can and should release
+   * any resources associated with this object.
+   * @returns This promise will resolve after the animation completes.
+   * The caller is expected to destroy several pieces at
+   * once and await the completion of `All()` of the animations.
+   * However, that is not required.
+   */
+  destroyPiece(piece: Piece): Promise<void>;
+
+  /**
+   * Move the GuiPiece to the position specified in the given LogicalPiece.
+   * @param piece Move the GUI element to (piece.rowIndex, piece.columnIndex).
+   * `piece` was the input to a previous call to `initializePiece()`.
+   */
+  jumpTo(piece: Piece): void;
+
+  /**
+   * Move the GuiPiece to the position specified in the given LogicalPiece.
+   * Animate the move from the GUI element's current position to this new position, then leave this element in its new position.
+   * The element will move along a straight line.
+   * @param piece This was the input to a previous call to `initializePiece()`.
+   * @returns This promise will resolve after the animation completes.
+   * Do not call updatePosition*(), drawPreview(), slide() or destroyPiece() on this piece again.
+   * It is okay to change bomb status and decorations, but don't try to move
+   * this piece again until this move is complete.
+   */
+  slideTo(piece: Piece): Promise<void>;
+  /**
+   * When the user is dragging the mouse we send constant updates to the GUI.
+   * @param direction Which coordinate to keep fixed and which to change.
+   * @param pieces The pieces to move.  The order of `pieces` is not important.
+   * @param offset How far to move each piece.  Positive numbers mean right or down.
+   * Negative numbers mean left or up.  This number is relative to the position in
+   * each individual `Piece`.
+   */
+  drawPreview(
+    direction: "vertical" | "horizontal",
+    pieces: readonly Piece[],
+    offset: number
+  ): void;
+
+  /**
+   * Move the GuiPiece to the position specified in the given LogicalPiece.
+   * Animate the move from the GUI element's current position to this new position,
+   * then leave this element in its new position.
+   * The element will take the shortest path, either by moving directly from start to finish,
+   * or by moving in the opposite direction and wrapping around.
+   *
+   * Presumably this will come after a series of calls to drawPreview().  The preview
+   * allows fractional positions, and it allows illegal positions.  After the program
+   * determines the final locations of each Piece, this function will move the pieces
+   * from the last preview location to their final location.
+   *
+   * Note:  This function and drawPreview() both take a list of pieces while jumpTo()
+   * and slideTo() work on individual pieces.  Originally I thought that grouping
+   * these operations together was required.  Then I thought it wasn't required, but
+   * it would help optimize things.  Now I don't see any value to accepting a whole
+   * array in some functions.  It's not a huge problem, but it is inconsistent.
+   * @param direction Which coordinate to keep fixed and which to change.
+   * @param pieces The pieces to move.  The order of `pieces` is not important.
+   */
+  rotateTo(
+    direction: "vertical" | "horizontal",
+    pieces: readonly Piece[]
+  ): Promise<void>;
+  /**
+   * Update the GUI to match the state of `piece.bomb`.
+   * Presumably the GUI will draw a 💣 emoji on the cell if `piece.bomb == true`.
+   * Presumably `piece.bomb` will only change from false to true.
+   * @param piece This was the input to a previous call to `initializePiece()`.
+   */
+  updateBomb(piece: Piece): void;
+  assignGroupDecorations(groups: Groups): GroupGroupActions;
 };
 
 /**
- * The first index is the row number, the second is the column number.
+ * The first index is the rowIndex number, the second is the column number.
  */
-export type AllPieces = ReadonlyArray<ReadonlyArray<Piece>>;
+type AllPieces = ReadonlyArray<ReadonlyArray<LogicalPiece>>;
 
 /**
  * An entire board, with no GUI.
@@ -218,33 +288,30 @@ export class LogicalBoard {
    * @returns A _new_ array containing the `Piece`s in the given column.
    */
   private getColumn(columnIndex: number) {
-    return this.#allPieces.map((row) => row[columnIndex]);
+    return this.#allPieces.map((rowIndex) => rowIndex[columnIndex]);
   }
 
   constructor(private readonly animator: Animator) {
     this.#allPieces = this.createRandom();
-  }
-  private createRandomPiece(rowNumber: number, columnNumber: number) {
-    return this.animator.createPiece(
-      rowNumber,
-      columnNumber,
-      Piece.randomColor()
+    this.#allPieces.forEach((row) =>
+      row.forEach((piece) => this.animator.initializePiece(piece))
     );
   }
   private createRandom() {
     // Start with completely random pieces.
-    const result = initializedArray(LogicalBoard.SIZE, (rowNumber) =>
+    const result = initializedArray(LogicalBoard.SIZE, (rowIndex) =>
       initializedArray(
         LogicalBoard.SIZE,
-        (columnNumber) =>
-          new Piece(rowNumber, columnNumber, Piece.randomColor())
+        (columnIndex) => new LogicalPiece(rowIndex, columnIndex)
       )
     );
-    // See if there are any groups that could immediately go away.
+    /**
+     *  Any groups that could immediately go away.
+     */
     const groups = findActionable(result);
     // Break up the groups, so nothing will happen until the user makes his first move.
     groups.forEach((group) => {
-      group.forEach(({ row, column }) => {
+      group.forEach(({ rowIndex, columnIndex }) => {
         const nearby = new Set<Color>();
         [
           [0, 1],
@@ -252,26 +319,22 @@ export class LogicalBoard {
           [1, 0],
           [-1, 0],
         ].forEach(([rowOffset, columnOffset]) => {
-          const rowArray = result[row + rowOffset];
+          const rowArray = result[rowIndex + rowOffset];
           if (rowArray) {
-            const piece = rowArray[column + columnOffset];
+            const piece = rowArray[columnIndex + columnOffset];
             if (piece) {
               nearby.add(piece.color);
             }
           }
         });
-        result[row][column] = new Piece(
-          row,
-          column,
+        result[rowIndex][columnIndex] = new LogicalPiece(
+          rowIndex,
+          columnIndex,
           pick(colors.filter((color) => !nearby.has(color)))
         );
       });
     });
-    return result.map((row) =>
-      row.map((piece) =>
-        this.animator.createPiece(piece.row, piece.column, piece.color)
-      )
-    );
+    return result;
   }
 
   /**
@@ -281,7 +344,7 @@ export class LogicalBoard {
    * @param groups The groups that can currently be harvested.
    * These are the first groups available to remove.
    * This method will automatically check for additional groups after that.
-   * 
+   *
    * We could recompute this, but not the `actions`.
    * @param actions The GUI associated with these `groups`.
    * We could try to recompute these, but we want this part of the display to match the preview that we've already shown.
@@ -294,7 +357,7 @@ export class LogicalBoard {
       actions = this.animator.assignGroupDecorations(groups);
       actions.highlightGroups();
     }
-    // Tell the GUI we are done?  In the previous code we did this:
+    // Tell the GUI that we are done?  In the previous code we did this:
     //       GUI.#newScoreDiv.innerHTML = "";
     //GUI.#chainBonusDiv.innerHTML = "";
   }
@@ -302,7 +365,10 @@ export class LogicalBoard {
     this.#allPieces = allPieces;
     allPieces.forEach((row, rowIndex) => {
       row.forEach((piece, columnIndex) => {
-        piece.moveToImmediately(rowIndex, columnIndex); 
+        piece.columnIndex = columnIndex;
+        piece.rowIndex = rowIndex;
+        //this.animator.updatePositionNow(piece);
+        //this.animator.updateBomb(piece);
       });
     });
   }
@@ -320,9 +386,7 @@ export class LogicalBoard {
     });
     const preview = (offset: number): void => {
       const row = this.#allPieces[rowIndex];
-      row.forEach((piece, columnIndex) =>
-        piece.moveToImmediately(rowIndex, wrap(columnIndex + offset))
-      );
+      this.animator.drawPreview("horizontal", row, offset);
       allPossibilities[roundedOffset(offset)].actions.highlightGroups();
     };
     const release = async (offset: number): Promise<void> => {
@@ -330,10 +394,10 @@ export class LogicalBoard {
       const proposedOffset = roundedOffset(offset);
       const revert = allPossibilities[proposedOffset].groups.length == 0;
       const finalOffset = revert ? 0 : proposedOffset;
-      const row = this.#allPieces[rowIndex];
-      await this.animator.rotateRight(row, finalOffset - offset);  // SIOMETHING WRONG WITH THE ANIMATION where the wrow or colyumn tries to snap to the nearest legal move.
-      const finalState = allPossibilities[finalOffset];
+      const finalState = allPossibilities[finalOffset]; // drawOffsetNow(row, 2.3, "row").  All relative to the original position of the cells.  same for drawOffsetAnimated() versions.  update the internal state after the animation has finished.  NO CHANGES AT all in LogicalBoard or LogicalPiece until the animation is done.  GuiPiece will keep track on the position while previewing.
       this.setAllPieces(finalState.pieces);
+      const row = this.#allPieces[rowIndex];
+      await this.animator.rotateTo("horizontal", row);
       await this.updateLoop(finalState.groups, finalState.actions);
     };
     return { preview, release };
@@ -342,7 +406,7 @@ export class LogicalBoard {
   startVerticalMove(columnIndex: number): PointerActions {
     /**
      * How to highlight the groups we might see in each position.
-     * We store these so if the user moves the mouse back and forth,
+     * We store these so if the user moves the mouse up and down,
      * he will see the same colors and symbols each time.
      */
     const allPossibilities = initializedArray(LogicalBoard.SIZE, (index) => {
@@ -353,8 +417,7 @@ export class LogicalBoard {
     });
     const preview = (offset: number): void => {
       const column = this.getColumn(columnIndex);
-      column.forEach((piece, rowIndex) =>
-        piece.moveToImmediately(wrap(rowIndex + offset), columnIndex) );
+      this.animator.drawPreview("vertical", column, offset);
       allPossibilities[roundedOffset(offset)].actions.highlightGroups();
     };
     const release = async (offset: number): Promise<void> => {
@@ -362,22 +425,10 @@ export class LogicalBoard {
       const proposedOffset = roundedOffset(offset);
       const revert = allPossibilities[proposedOffset].groups.length == 0;
       const finalOffset = revert ? 0 : proposedOffset;
-      const column = this.getColumn(columnIndex);
-      await this.animator.rotateDown(column, finalOffset-offset);
-
-      //Need to fix this.  rotateDown() and rotateLeft() should call
-      // the original Piece.moveToImmediately(), just like
-      // GuiPiece.moveToAnimated() does.  In both cases
-      // Logical Board is asking display-output.ts to make a movement
-      // from the current position to a specified position.  In both
-      // cases display-output should update the internal state of the
-      // piece so we don't have to worry about updating that value
-      // before or after or during the animation.
-
-      //await sleep(500);
       const finalState = allPossibilities[finalOffset];
-      this.#allPieces = finalState.pieces;
       this.setAllPieces(finalState.pieces);
+      const column = this.getColumn(columnIndex);
+      await this.animator.rotateTo("vertical", column);
       await this.updateLoop(finalState.groups, finalState.actions);
     };
     return { preview, release };
@@ -386,57 +437,68 @@ export class LogicalBoard {
   private async removeGroups(groupsToRemove: Groups) {
     /**
      * The array index is the column number.
-     * The entries in each set are the row numbers.
+     * The entries in each set are the rowIndex numbers.
      */
     const allIndicesToRemove = initializedArray(
       LogicalBoard.SIZE,
       () => new Set<number>()
     );
-    const promises: Promise<unknown>[] = [];
-    groupsToRemove.forEach((group) => {
-      group.forEach(({ row, column }) => {
-        const set = allIndicesToRemove[column];
-        if (set.has(row)) {
-          throw new Error("wtf"); // Duplicate.
-        }
-        set.add(row);
-        promises.push(this.#allPieces[row][column].remove());
+    {
+      const promises: Promise<void>[] = [];
+      groupsToRemove.forEach((group) => {
+        group.forEach(({ rowIndex, columnIndex: column }) => {
+          const set = allIndicesToRemove[column];
+          if (set.has(rowIndex)) {
+            throw new Error("wtf"); // Duplicate.
+          }
+          set.add(rowIndex);
+          promises.push(
+            this.animator.destroyPiece(this.#allPieces[rowIndex][column])
+          );
+        });
       });
-    });
-    await Promise.all(promises);
-    promises.length = 0;
+      await Promise.all(promises);
+    }
     /**
-     * The first index is the row number, the second is the column number.
+     * The first index is the rowIndex number, the second is the column number.
      */
     const final = initializedArray(
       LogicalBoard.SIZE,
-      () => new Array<Piece>(LogicalBoard.SIZE)
+      () => new Array<LogicalPiece>(LogicalBoard.SIZE)
     );
+    const needToSlide: Piece[] = [];
     // Note this implementation is a bit simple.  Eventually we will
     // need to deal with 2⨉2 chuzzle pieces.  Some `Piece`'s will have
     // to be added from the bottom.
     allIndicesToRemove.forEach((indicesToRemove, columnIndex) => {
-      const newColumn: Piece[] = [];
+      const newColumn: LogicalPiece[] = [];
       for (
         let originalRowIndex = 0;
         originalRowIndex < LogicalBoard.SIZE;
         originalRowIndex++
       ) {
         if (!indicesToRemove.has(originalRowIndex)) {
+          // Keep this piece, but possibly move it down.
           newColumn.push(this.#allPieces[originalRowIndex][columnIndex]);
         }
       }
       for (let i = 0; newColumn.length < LogicalBoard.SIZE; i++) {
         const initialRow = -1 - i;
-        const newPiece = this.createRandomPiece(initialRow, columnIndex);
+        const newPiece = new LogicalPiece(initialRow, columnIndex);
+        this.animator.initializePiece(newPiece);
         newColumn.unshift(newPiece);
       }
+
       newColumn.forEach((piece, finalRowIndex) => {
         final[finalRowIndex][columnIndex] = piece;
-        promises.push(piece.moveToAnimated(finalRowIndex, columnIndex));
+        piece.columnIndex = columnIndex;
+        piece.rowIndex = finalRowIndex;
+        needToSlide.push(piece);
       });
     });
+
+    await Promise.all(needToSlide.map((piece) => this.animator.slideTo(piece)));
+
     this.setAllPieces(final);
-    await Promise.all(promises);
   }
 }

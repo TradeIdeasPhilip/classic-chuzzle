@@ -2,12 +2,12 @@
  * This file exports findActionable() and hides a lot of the details.
  */
 
-import { AllPieces, Color, Piece } from "./logical-board";
+import { Color, Piece } from "./logical-board";
 
 /**
  * This is all we really need from the Piece class.
  */
-type HasColor = { readonly color:Color};
+type HasColor = { readonly color: Color };
 
 /**
  * A list of pieces that are all the same color and adjacent.
@@ -75,7 +75,9 @@ class GroupCell {
    * @param allPieces What we want to show.
    * @returns The GUI that we are using to show it.
    */
-  private static createAll(allPieces: readonly(readonly HasColor[])[]): AllGroupCells {
+  private static createAll(
+    allPieces: readonly (readonly HasColor[])[]
+  ): AllGroupCells {
     return allPieces.map((row) => row.map((piece) => new GroupCell(piece)));
   }
   /**
@@ -152,7 +154,7 @@ class GroupCell {
    * @param allPieces The current state of the board.
    * @returns A list of all groups of pieces which can be removed.
    */
-  static findActionable(allPieces: readonly(readonly HasColor[])[]): Group[] {
+  static findActionable(allPieces: readonly (readonly HasColor[])[]): Group[] {
     const allGroupCells = this.createAll(allPieces);
     this.combineAll(allGroupCells);
     return this.findBigGroups(allGroupCells);
@@ -169,6 +171,10 @@ class GroupCell {
  */
 export type Groups = ReadonlyArray<ReadonlyArray<Piece>>;
 
-export function findActionable(allPieces: AllPieces): Groups {
-  return GroupCell.findActionable(allPieces).map((group) => group.contents as Piece[]);
+export function findActionable(
+  allPieces: ReadonlyArray<ReadonlyArray<Piece>>
+): Groups {
+  return GroupCell.findActionable(allPieces).map(
+    (group) => group.contents as Piece[]
+  );
 }

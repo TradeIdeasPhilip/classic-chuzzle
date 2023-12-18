@@ -67,7 +67,8 @@ export function initializeUserInputs(logicalBoard: LogicalBoard) {
          */
         relevantMouseMove(pointerEvent: PointerEvent): number;
         readonly actions: PointerActions;
-      }|{readonly state:"animation"};
+      }
+    | { readonly state: "animation" };
 
   let stateInfo: StateInfo = { state: "none" };
 
@@ -86,7 +87,7 @@ export function initializeUserInputs(logicalBoard: LogicalBoard) {
   });
 
   svg.addEventListener("pointermove", (pointerEvent) => {
-    if (stateInfo.state == "none" || stateInfo.state=="animation") {
+    if (stateInfo.state == "none" || stateInfo.state == "animation") {
       return;
     }
     pointerEvent.stopPropagation();
@@ -139,7 +140,7 @@ export function initializeUserInputs(logicalBoard: LogicalBoard) {
         // both are equal.  keep trying.
         return;
       }
-    } 
+    }
     stateInfo.actions.preview(stateInfo.relevantMouseMove(pointerEvent));
   });
 
@@ -156,9 +157,9 @@ export function initializeUserInputs(logicalBoard: LogicalBoard) {
       case "vertical": {
         svg.style.cursor = "none";
         const instructions = stateInfo;
-        stateInfo = { state: "animation"};
-        await instructions.actions.release(instructions.relevantMouseMove(pointerEvent)
-          
+        stateInfo = { state: "animation" };
+        await instructions.actions.release(
+          instructions.relevantMouseMove(pointerEvent)
         );
         break;
       }
@@ -173,4 +174,3 @@ export function initializeUserInputs(logicalBoard: LogicalBoard) {
     svg.style.cursor = "";
   });
 }
-

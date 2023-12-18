@@ -9,10 +9,29 @@ import {
 } from "./logical-board";
 import { assertClass, positiveModulo } from "./utility";
 
+// TODO exponential changes in speed.  If the user makes one move and that sets off several automatic moves
+// in a row, each of the automatic moves in the series should take less time than the previous one.  So people
+// don't get bored.
+
+/**
+ * This is where we are documenting what will be added to the score.
+ * 
+ * Presumably at some time I'll add points to each of these, and keep a running tally.
+ * That's why I use terms like `addToScore()` and `newScoreDiv`.
+ */
 const newScoreDiv = getById("newScore", HTMLDivElement);
+
+/**
+ * How many automatic moves we've seen in a row.
+ * And how that affects the score.
+ */
 const chainBonusDiv = getById("chainBonus", HTMLDivElement);
 
-const backgroundColors: ReadonlyMap<string, ReadonlyArray<string>> = new Map([
+/**
+ * The keys are background colors, i.e the colors of the cells.
+ * The values are foreground colors that go well with each background color.
+ */
+const decorationColors: ReadonlyMap<Color, ReadonlyArray<string>> = new Map([
   [
     "orange",
     [
@@ -96,6 +115,15 @@ const backgroundColors: ReadonlyMap<string, ReadonlyArray<string>> = new Map([
     ],
   ],
 ]);
+
+/**
+ * A set of interesting characters.
+ * This program uses these characters to mark which elements are part of which groups.
+ * 
+ * I chose this in part because it was easy to do.
+ * And in part because it looks artistic.
+ * And in part because its fun to go looking for new interesting unicode characters.
+ */
 const decorations: ReadonlyArray<string> = [
   "ʻ",
   "☆",
@@ -210,21 +238,26 @@ function animationOptions(needToMove: number): KeyframeAnimationOptions {
   };
 }
 
+/**
+ * The individual colored cells are direct descendants of this element.
+ */
 const boardElement = getById("board", SVGElement);
 
-function clearAllHighlights() {
+function clearAllDecorations() {
   boardElement
     .querySelectorAll<SVGTextElement>("text.crystal-decoration")
     .forEach((element) => (element.textContent = ""));
 }
 
+type HasPosition = { readonly rowIndex: number; columnIndex: number };
+
 /**
  * One of these for each piece on the board.
  * These objects own the DOM Element objects.
  */
-class GuiPiece extends Piece {
+class GuiPiece {
   /**
-   * The GuiPiece elements will go on this #board.
+   * New GuiPiece elements be cloned from this element.
    */
   static #pieceTemplate = getById(
     "piece",
@@ -233,36 +266,71 @@ class GuiPiece extends Piece {
   readonly element: SVGGElement;
   readonly decorationElement: SVGTextElement;
 
+  /**
+   * This is part of an optimization.  This avoids my code translating the 
+   * instructions into a string, and the API parsing the values back out.
+   */
   static readonly #positionColumn = CSS.px(Math.E);
+  /**
+   * This is part of an optimization.  This avoids my code translating the 
+   * instructions into a string, and the API parsing the values back out.
+   */
   static readonly #positionRow = CSS.px(Math.PI);
+  /**
+   * This is part of an optimization.  This avoids my code translating the 
+   * instructions into a string, and the API parsing the values back out.
+   */
   static readonly #positionHelper = new CSSTransformValue([
     new CSSTranslate(this.#positionColumn, this.#positionRow),
   ]);
 
-  private updatePositionOnScreen() {
-    GuiPiece.#positionColumn.value = this.column;
-    GuiPiece.#positionRow.value = this.row;
+  /**
+   * Move to here.
+   *
+   * If there is no animation in progress, just move to here
+   * immediately.  If there is an animation, this is where the
+   * piece will land after the animation.
+   *
+   * Either way, the next animation will start from here.
+   *
+   * Presumably you'd start the animation _then immediately_ call this
+   * method.
+   * @param piece Grab the position from here.
+   */
+  updateFinalPosition(piece: HasPosition): void {
+    // Save this position.  The next animation will start from here.
+    this.#columnIndex = piece.columnIndex;
+    this.#rowIndex = piece.rowIndex;
+    // Set the position of the GUI element.
+    GuiPiece.#positionColumn.value = piece.columnIndex;
+    GuiPiece.#positionRow.value = piece.rowIndex;
     this.element.attributeStyleMap.set("transform", GuiPiece.#positionHelper);
   }
 
-  override moveToImmediately(row: number, column: number): void {
-    super.moveToImmediately(row, column);
-    this.updatePositionOnScreen();
-  }
-
-  //note unusual / different use of options===undefined here.
-  override moveToAnimated(
-    row: number,
-    column: number,
+  /**
+   * Move the gui element from it's current position to the specified position.
+   * The element will move along a straight line.
+   * @param piece This specifies the destination where the animation will land.
+   * @param options Options passed on the Element.animate().
+   * The default will be something reasonable based on how far the piece has to move.
+   * @returns A promise that will resolve when the animation is complete.
+   */
+  async slideDirectlyTo(
+    piece: HasPosition,
     options?: KeyframeAnimationOptions
-  ): Promise<unknown> {
-    const initialColumn = this.column;
-    const initialRow = this.row;
+  ): Promise<void> {
+    const initialColumn = this.#columnIndex;
+    const initialRow = this.#rowIndex;
+    this.updateFinalPosition(piece);
+    const finalColumn = this.#columnIndex;
+    const finalRow = this.#rowIndex;
     if (!options) {
-      const needToMove = Math.hypot(row - initialRow, column - initialColumn);
+      const needToMove = Math.hypot(
+        finalRow - initialRow,
+        finalColumn - initialColumn
+      );
       options = animationOptions(needToMove);
     }
-    super.moveToImmediately(row, column);
     const element = this.element;
     // Does not work for svg: element.style.zIndex="3";
     // So instead I'm moving it to the end of the list to get the same effect.
@@ -270,25 +338,76 @@ class GuiPiece extends Piece {
     const animation = element.animate(
       [
         { transform: `translate(${initialColumn}px, ${initialRow}px)` },
-        { transform: `translate(${column}px, ${row}px)` },
+        { transform: `translate(${piece.columnIndex}px, ${piece.rowIndex}px)` },
       ],
       options
     );
-    return animation.finished;
+    await animation.finished;
   }
-  constructor(row: number, column: number, color: Color) {
-    super(row, column, color);
+
+  async rotateTo(
+    piece: Piece,
+    direction: "vertical" | "horizontal"
+  ): Promise<void> {
+    const horizontal = direction == "horizontal";
+    /*
+    console.log({
+      guiRow: this.#rowIndex,
+      guiColumn: this.#columnIndex,
+      logicalRow: piece.rowIndex,
+      logicalColumn: piece.columnIndex,
+      direction,
+      horizontal,
+      offset: horizontal
+        ? piece.columnIndex - this.#columnIndex
+        : piece.rowIndex - this.#rowIndex,
+    });
+    */
+    const options: KeyframeAnimationOptions = (() => {
+      const offset = horizontal
+        ? piece.columnIndex - this.#columnIndex
+        : piece.rowIndex - this.#rowIndex;
+      /**
+       * This might go directly, or it might go in the opposite direction and wrap around.
+       */
+      const shortestMove =
+        positiveModulo(offset + LogicalBoard.SIZE / 2, LogicalBoard.SIZE) -
+        LogicalBoard.SIZE / 2;
+      return animationOptions(Math.abs(shortestMove));
+    })();
+    const { position, offset } = horizontal
+      ? makeScript(this.#columnIndex, piece.columnIndex)
+      : makeScript(this.#rowIndex, piece.rowIndex);
+    const transform = position.map((index) =>
+      horizontal
+        ? `translate(${index}px, ${piece.rowIndex}px)`
+        : `translate(${piece.columnIndex}px, ${index}px)`
+    );
+    this.updateFinalPosition(piece);
+    await this.element.animate({ transform, offset }, options).finished;
+  }
+
+  /** 
+   * The next animation should start from here.
+   */
+  #rowIndex = NaN;
+  /** 
+   * The next animation should start from here.
+   */
+  #columnIndex = NaN;
+  constructor(piece: Piece) {
     const clone = assertClass(
       GuiPiece.#pieceTemplate.cloneNode(true),
       SVGGElement
     );
     this.element = clone;
     this.decorationElement = clone.querySelector("text.crystal-decoration")!;
-    clone.setAttribute("fill", color);
+    clone.setAttribute("fill", piece.color);
+    this.updateFinalPosition(piece);
+    //TODO bomb
     boardElement.appendChild(clone);
-    this.updatePositionOnScreen();
   }
-  override async remove(): Promise<void> {
+  async remove(): Promise<void> {
     /**
      * Where `this` will land at the end of the animation.
      */
@@ -300,7 +419,8 @@ class GuiPiece extends Piece {
     // Pick a spot completely contained in the top left quarter of the board.
     finalRowIndex = Math.random() * (LogicalBoard.SIZE / 2 - 1);
     finalColumnIndex = Math.random() * (LogicalBoard.SIZE / 2 - 1);
-    { // Move the final point off of the board.
+    {
+      // Move the final point off of the board.
       /**
        * * ⅓ chance of moving directly up.
        * * ⅓ chance of moving directly left.
@@ -314,7 +434,8 @@ class GuiPiece extends Piece {
         finalColumnIndex -= LogicalBoard.SIZE / 2;
       }
     }
-    { // Optionally flip the final position over the x axis and/or the y axis.
+    {
+      // Optionally flip the final position over the x axis and/or the y axis.
       // This will ensure that we have coverage in all directions.
       /**
        * This is random but weighted.  It will prefer longer moves.
@@ -324,59 +445,51 @@ class GuiPiece extends Piece {
        */
       const needToFlip = (initial: number) =>
         Math.random() > (initial + 1) / (LogicalBoard.SIZE + 1);
-      if (needToFlip(this.row)) {
+      if (needToFlip(this.#rowIndex)) {
         finalRowIndex = LogicalBoard.SIZE - finalRowIndex - 1;
       }
-      if (needToFlip(this.column)) {
+      if (needToFlip(this.#columnIndex)) {
         finalColumnIndex = LogicalBoard.SIZE - finalColumnIndex - 1;
       }
     }
-    await this.moveToAnimated(finalRowIndex, finalColumnIndex, {
-      duration: 1000,
-      easing: "ease-in",
-    });
+    await this.slideDirectlyTo(
+      { rowIndex: finalRowIndex, columnIndex: finalColumnIndex },
+      {
+        duration: 1000,
+        easing: "ease-in",
+      }
+    );
     this.element.remove();
     (this as any).element = "💀";
   }
 }
 
 /**
- * How should a `GuiPiece` move?
- * This takes care of the fact that some pieces will wrap around.
- * All pieces will move at the same rate, so the pieces will always be touching.
- * @param offset How far the GuiPiece moves through the entire animation.
- * Positive for something moving left to right or top to bottom.
+ * Useful when we display a `GuiPiece` partway off the board.
+ * This attaches to piece to whichever side leaves more of the piece on the board.
+ * @param change
+ * @returns A value between -½ and LogicalBoard.SIZE - ½.
  */
-const makeMakeScript = (offset: number) => {
-  /**
-   * What's the quickest way to get to the goal?
-   * Remember that the items can rotate around.
-   * This is the number of cells to move down or right.
-   * 0 means the board is already correct.
-   * Negative numbers means to move left or up.
-   */
-  const needToMove =
-    positiveModulo(offset + LogicalBoard.SIZE / 2, LogicalBoard.SIZE) -
-    LogicalBoard.SIZE / 2;
-    //console.log({needToMove, offset});
-  const options: KeyframeAnimationOptions = animationOptions(needToMove);
+const wrap = (change: number) => {
+  return positiveModulo(change + 0.5, LogicalBoard.SIZE) - 0.5;
+};
 
-  /**
-   * @param finalPosition Where the `GuiPiece` will land, in svg units.
-   * @returns An array of `position`s and an array of times labeled `offset`.
-   * `offset` is in the right format for a PropertyIndexedKeyframes input to `Element.animate()`.
-   */
-  const makeScript = (initialPosition: number) => {
-    const position = [initialPosition];
-    const offset = [0];
-    const finalPosition = positiveModulo(
-      Math.round(initialPosition + needToMove),
-      LogicalBoard.SIZE
-    );
-    if (finalPosition > 5.1) {
-      // finalPosition should be an integer ≥ 0 and < LogicalBoard.SIZE
-      throw new Error("wtf");
-    }    /**
+/**
+ * Create a script for animating a tile.  The tile can move along a
+ * row or a column.  The tile will always take the shortest path,
+ * possibly wrapping around.
+ * @param initialPosition Where the `GuiPiece` is starting from.
+ * @param finalPosition Where the `GuiPiece` will land, in svg units.
+ * @returns An array of `position`s and an array of times labeled `offset`.
+ * `offset` is in the right format for a PropertyIndexedKeyframes input to `Element.animate()`.
+ */
+const makeScript = (initialPosition: number, finalPosition: number) => {
+  const position = [initialPosition];
+  const offset = [0];
+  if (Math.abs(initialPosition - finalPosition) > LogicalBoard.SIZE / 2) {
+    // The direct route would have taken more than half a complete
+    // rotation.  So we wrap around, instead, to take the shorter route.
+    /**
      * Add points to the script to make the GuiPiece wrap around.
      * @param secondPosition The position of the GuiPiece immediately _before_ it jumps to the other side.
      * @param thirdPosition The position of the GuiPiece immediately _after_ it jumps to the other side.
@@ -397,64 +510,63 @@ const makeMakeScript = (offset: number) => {
       const jumpTime = initialSize / totalSize;
       offset.push(jumpTime, jumpTime);
     };
-    // If the piece wraps around, add some intermediate points.
-    if (Math.sign(needToMove) == -1) {
-      if (finalPosition > initialPosition) {
-        addMiddle(-0.5, LogicalBoard.SIZE - 0.5);
-      }
+    if (finalPosition > initialPosition) {
+      addMiddle(-0.5, LogicalBoard.SIZE - 0.5);
     } else {
-      if (finalPosition < initialPosition) {
-        addMiddle(LogicalBoard.SIZE - 0.5, -0.5);
-      }
+      addMiddle(LogicalBoard.SIZE - 0.5, -0.5);
     }
-    position.push(finalPosition);
-    offset.push(1.0);
-    return { position, offset,finalPosition };
-  };
-  return { makeScript, options };
+  }
+  position.push(finalPosition);
+  offset.push(1.0);
+  return { position, offset };
 };
 
 class AnimatorImpl implements Animator {
-  createPiece(row: number, column: number, color: Color): Piece {
-    return new GuiPiece(row, column, color);
+  #guiPieces = new Map<Piece, GuiPiece>();
+  initializePiece(piece: Piece): void {
+    this.#guiPieces.set(piece, new GuiPiece(piece));
   }
-  async rotateDown(column: readonly Piece[], offset: number): Promise<void> {
-    const { makeScript, options } = makeMakeScript(offset);
-    const promises: Promise<unknown>[] = [];
-    column.forEach((guiPiece) => {
-      const { position, offset } = makeScript(guiPiece.row);
-      const transform = position.map(
-        (row) => `translate(${guiPiece.column}px, ${row}px)`
-      );
-      //console.log({transform, offset,options})
-      promises.push(
-        assertClass(guiPiece, GuiPiece).element.animate(
-          { transform, offset },
-          options
-        ).finished
-      );
+  destroyPiece(piece: Piece): Promise<void> {
+    const guiPiece = this.#guiPieces.get(piece)!;
+    this.#guiPieces.delete(piece);
+    return guiPiece.remove();
+  }
+  jumpTo(piece: Piece): void {
+    this.#guiPieces.get(piece)!.updateFinalPosition(piece);
+  }
+  slideTo(piece: Piece): Promise<void> {
+    return this.#guiPieces.get(piece)!.slideDirectlyTo(piece);
+  }
+  drawPreview(
+    direction: "vertical" | "horizontal",
+    pieces: readonly Piece[],
+    offset: number
+  ): void {
+    pieces.forEach((piece) => {
+      const guiPiece = this.#guiPieces.get(piece)!;
+      let { rowIndex, columnIndex } = piece;
+      if (direction == "vertical") {
+        rowIndex = wrap(rowIndex + offset);
+      } else {
+        columnIndex = wrap(columnIndex + offset);
+      }
+      guiPiece.updateFinalPosition({ rowIndex, columnIndex });
     });
+  }
+  async rotateTo(
+    direction: "vertical" | "horizontal",
+    pieces: readonly Piece[]
+  ): Promise<void> {
+    const promises = pieces.map((piece) =>
+      this.#guiPieces.get(piece)!.rotateTo(piece, direction)
+    );
     await Promise.all(promises);
   }
-  async rotateRight(row: readonly Piece[], offset: number): Promise<void> {
-    //console.log({row: row.map(piece => { const {row, column} = piece;return {row,column}}),offset})
-    const { makeScript, options } = makeMakeScript(offset);
-    const promises: Promise<unknown>[] = [];
-    row.forEach((guiPiece) => {
-      const { position, offset } = makeScript(guiPiece.column);
-      const transform = position.map(
-        (column) => `translate(${column}px, ${guiPiece.row}px)`
-      );
-      //console.log({transform, offset,options})
-      promises.push(
-        assertClass(guiPiece, GuiPiece).element.animate(
-          { transform, offset },
-          options
-        ).finished
-      );
-    });
-    await Promise.all(promises);
+  updateBomb(piece: Piece): void {
+    piece;
+    throw new Error("Method not implemented.");
   }
+
   assignGroupDecorations(
     groups: ReadonlyArray<ReadonlyArray<Piece>>
   ): GroupGroupActions {
@@ -466,7 +578,7 @@ class AnimatorImpl implements Animator {
           return Promise.resolve();
         },
         highlightGroups() {
-          clearAllHighlights();
+          clearAllDecorations();
         },
       };
     } else {
@@ -474,22 +586,27 @@ class AnimatorImpl implements Animator {
       /**
        * Data that we compute once then save for later.
        */
-      const save = groups.map((pieces) => {
-        const decorationColor = pick(backgroundColors.get(pieces[0].color)!);
+      const savedGroupInfo = groups.map((pieces) => {
+        const backgroundColor = pieces[0].color;
+        const decorationColor = pick(decorationColors.get(backgroundColor)!);
         const decorationIndex = Math.floor(
           Math.random() * decorationsAvailable.length
         );
         const decorationText = decorationsAvailable[decorationIndex];
         decorationsAvailable.splice(decorationIndex, 1);
-        return { pieces, decorationColor, decorationText };
+        const guiPieces = pieces.map((piece) => {
+          const guiPiece = this.#guiPieces.get(piece);
+          if (guiPiece == undefined) {
+            throw new Error("wtf");
+          }
+          return guiPiece;
+        });
+        return { guiPieces, decorationColor, decorationText, backgroundColor };
       });
       return {
         async addToScore(counter: number) {
           // Flash the items about to be collected.
-          groups.forEach((group) => {
-            const pieces: readonly GuiPiece[] = group.map((piece) =>
-              assertClass(piece, GuiPiece)
-            );
+          savedGroupInfo.forEach(({ guiPieces }) => {
             const maxOpacity = 1;
             const minOpacity = Math.random() * 0.2 + 0.05;
             const keyframes: Keyframe[] = [
@@ -508,8 +625,8 @@ class AnimatorImpl implements Animator {
               iterationStart: Math.random(),
               iterations: Infinity,
             };
-            pieces.forEach((piece) => {
-              piece.decorationElement.animate(keyframes, options);
+            guiPieces.forEach((guiPiece) => {
+              guiPiece.decorationElement.animate(keyframes, options);
             });
           });
           if (counter < 2) {
@@ -518,30 +635,36 @@ class AnimatorImpl implements Animator {
             chainBonusDiv.innerText = `Chain Bonus: ⨉ ${counter}`;
           }
           newScoreDiv.innerHTML = "";
-          save.forEach(({ pieces, decorationColor, decorationText }, index) => {
-            if (index > 0) {
-              newScoreDiv.append(" + ");
+          savedGroupInfo.forEach(
+            (
+              { guiPieces, decorationColor, decorationText, backgroundColor },
+              index
+            ) => {
+              if (index > 0) {
+                newScoreDiv.append(" + ");
+              }
+              const span = document.createElement("span");
+              span.innerText = `${decorationText} ${guiPieces.length}`;
+              span.style.color = decorationColor;
+              span.style.borderColor = span.style.backgroundColor =
+                backgroundColor;
+              span.classList.add("individualScore");
+              newScoreDiv.appendChild(span);
             }
-            const span = document.createElement("span");
-            span.innerText = `${decorationText} ${pieces.length}`;
-            span.style.color = decorationColor;
-            span.style.borderColor = span.style.backgroundColor =
-              pieces[0].color;
-            span.classList.add("individualScore");
-            newScoreDiv.appendChild(span);
-          });
+          );
           await sleep(2000);
         },
         highlightGroups() {
-          clearAllHighlights();
-          save.forEach(({ pieces, decorationColor, decorationText }) => {
-            pieces.forEach((piece) => {
-              const guiPiece = assertClass(piece, GuiPiece);
-              const decorationElement = guiPiece.decorationElement;
-              decorationElement.textContent = decorationText;
-              decorationElement.style.fill = decorationColor;
-            });
-          });
+          clearAllDecorations();
+          savedGroupInfo.forEach(
+            ({ guiPieces, decorationColor, decorationText }) => {
+              guiPieces.forEach((guiPiece) => {
+                const decorationElement = guiPiece.decorationElement;
+                decorationElement.textContent = decorationText;
+                decorationElement.style.fill = decorationColor;
+              });
+            }
+          );
         },
       };
     }
