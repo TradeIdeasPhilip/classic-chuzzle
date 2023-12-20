@@ -8,6 +8,7 @@ import { LogicalBoard, PointerActions } from "./logical-board";
 
 export function initializeUserInputs(logicalBoard: LogicalBoard) {
   const svg = getById("main", SVGSVGElement);
+  const mousePointerGroup = getById("mousePointer", SVGGElement);
 
   /**
    *
@@ -156,6 +157,7 @@ export function initializeUserInputs(logicalBoard: LogicalBoard) {
       case "horizontal":
       case "vertical": {
         svg.style.cursor = "none";
+        mousePointerGroup.style.display = "";
         const instructions = stateInfo;
         stateInfo = { state: "animation" };
         await instructions.actions.release(
@@ -172,5 +174,11 @@ export function initializeUserInputs(logicalBoard: LogicalBoard) {
     }
     stateInfo = { state: "none" };
     svg.style.cursor = "";
+    mousePointerGroup.style.display = "none";
+  });
+
+  svg.addEventListener("pointermove", (pointerEvent) => {
+    const { row, column } = translateCoordinates(pointerEvent);
+    mousePointerGroup.style.transform = `translate(${column}px,${row}px)`;
   });
 }
