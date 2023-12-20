@@ -6,9 +6,10 @@ import { getById } from "phil-lib/client-misc";
 import { makeLinear } from "phil-lib/misc";
 import { LogicalBoard, PointerActions } from "./logical-board";
 
+import cursorUrl from "../cursor.svg";
+
 export function initializeUserInputs(logicalBoard: LogicalBoard) {
   const svg = getById("main", SVGSVGElement);
-  const mousePointerGroup = getById("mousePointer", SVGGElement);
 
   /**
    *
@@ -156,8 +157,11 @@ export function initializeUserInputs(logicalBoard: LogicalBoard) {
       }
       case "horizontal":
       case "vertical": {
-        svg.style.cursor = "none";
-        mousePointerGroup.style.display = "";
+        // Show something that is less distracting than any of the standard cursors.
+        // So you can see the animation.
+        // My intention is the same as a "wait" cursor, but that's especially distracting.
+        // "none" was a little bit confusing sometimes, so I made an outline only cursor.
+        svg.style.cursor = `url("${cursorUrl}"),none`;
         const instructions = stateInfo;
         stateInfo = { state: "animation" };
         await instructions.actions.release(
@@ -173,12 +177,6 @@ export function initializeUserInputs(logicalBoard: LogicalBoard) {
       }
     }
     stateInfo = { state: "none" };
-    svg.style.cursor = "";
-    mousePointerGroup.style.display = "none";
-  });
-
-  svg.addEventListener("pointermove", (pointerEvent) => {
-    const { row, column } = translateCoordinates(pointerEvent);
-    mousePointerGroup.style.transform = `translate(${column}px,${row}px)`;
+    svg.style.cursor = "grab";
   });
 }
