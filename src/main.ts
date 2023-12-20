@@ -1,6 +1,6 @@
 import "./style.css";
 import { getById } from "phil-lib/client-misc";
-import { LogicalBoard } from "./logical-board";
+import { LogicalBoard, colors } from "./logical-board";
 import { animator } from "./display-output";
 import { initializeUserInputs } from "./user-input";
 
@@ -15,7 +15,7 @@ import { initializeUserInputs } from "./user-input";
 
 {
   // BACKGROUND ANIMATION
-  const [black, white] = getById("background", SVGGElement).querySelectorAll(
+  const [black, white, color] = getById("background", SVGGElement).querySelectorAll(
     "circle"
   );
   black.animate(
@@ -30,6 +30,9 @@ import { initializeUserInputs } from "./user-input";
       iterations: Infinity,
     }
   );
+  color.animate(
+    colors.flatMap((color, index) => [{fill:color, opacity: 0, offset: index/colors.length}, {fill:color, opacity: 0.15, offset: (index+0.25)/colors.length}, {fill:color, opacity: 0.15, offset: (index+0.75)/colors.length}, {fill:color, opacity: 0, offset: (index+1)/colors.length}]), {duration:4000*colors.length, iterations: Infinity}
+  )
 }
 
 initializeUserInputs(new LogicalBoard(animator));

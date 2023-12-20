@@ -104,7 +104,7 @@ export type Color = "red" | "green" | "blue" | "yellow" | "orange" | "violet";
 /**
  * Each legal color listed once.
  */
-const colors: readonly Color[] = [
+export const colors: readonly Color[] = [
   "red",
   "green",
   "blue",
