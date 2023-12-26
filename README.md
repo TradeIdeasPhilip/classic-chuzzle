@@ -4,8 +4,8 @@
 
 Missing a lot, but playable.
 
-I added instructions.
-You should now understand what's going on without me looking over your shoulder.
+Sometimes I display bombs.
+But they don't explode yet.
 
 ## How to Play
 

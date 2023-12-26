@@ -17,9 +17,8 @@ div.cell-phone-warning {
   }
 }
 
-.crystal-decoration {
+svg text {
   font-size: 0.5px;
-  fill: cyan;
   text-anchor: middle;
   dominant-baseline: middle;
   pointer-events: none;
@@ -54,4 +53,9 @@ div.cell-phone-warning {
   border-radius: 1em;
   padding: 0.75em 1em;
   text-align: justify;
+}
+
+text.crystal-decoration-background {
+  stroke-width: 0.125;
+  stroke-miterlimit: 0.125;
 }

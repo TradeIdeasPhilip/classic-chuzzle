@@ -120,7 +120,6 @@ export type Piece = {
   readonly rowIndex: number;
   readonly columnIndex: number;
   readonly color: Color;
-  readonly bomb: boolean;
 };
 
 class LogicalPiece implements Piece {
@@ -265,9 +264,11 @@ export type Animator = {
    * Presumably the GUI will draw a 💣 emoji on the cell if `piece.bomb == true`.
    * Presumably `piece.bomb` will only change from false to true.
    * @param piece This was the input to a previous call to `initializePiece()`.
+   * @param bombVisible If true, show the bomb.  If false, hid the bomb.
    */
-  updateBomb(piece: Piece): void;
+  updateBomb(piece: Piece, bombVisible: boolean): void;
   assignGroupDecorations(groups: Groups): GroupGroupActions;
+  cancelGroup(piece: Piece): void;
 };
 
 /**
@@ -351,8 +352,21 @@ export class LogicalBoard {
    */
   private async updateLoop(groups: Groups, actions: GroupGroupActions) {
     for (let counter = 1; groups.length > 0; counter++) {
+      const immuneFromDestruction = new Set<Piece>();
+      groups.forEach((group) => {
+        if (group.length == 5) {
+          const addBombToThisPiece = pick(group);
+          immuneFromDestruction.add(addBombToThisPiece);
+          this.animator.cancelGroup(addBombToThisPiece);
+          this.animator.updateBomb(addBombToThisPiece, true);
+        }
+      });
       await actions.addToScore(counter);
-      await this.removeGroups(groups);
+      await this.removePieces(
+        groups.flatMap((group) =>
+          group.filter((piece) => !immuneFromDestruction.has(piece))
+        )
+      );
       groups = findActionable(this.#allPieces);
       actions = this.animator.assignGroupDecorations(groups);
       actions.highlightGroups();
@@ -434,7 +448,7 @@ export class LogicalBoard {
     return { preview, release };
   }
 
-  private async removeGroups(groupsToRemove: Groups) {
+  private async removePieces(piecesToRemove: Piece[]) {
     /**
      * The array index is the column number.
      * The entries in each set are the rowIndex numbers.
@@ -444,19 +458,18 @@ export class LogicalBoard {
       () => new Set<number>()
     );
     {
-      const promises: Promise<void>[] = [];
-      groupsToRemove.forEach((group) => {
-        group.forEach(({ rowIndex, columnIndex: column }) => {
-          const set = allIndicesToRemove[column];
+      const promises: Promise<void>[] = piecesToRemove.map(
+        ({ rowIndex, columnIndex }) => {
+          const set = allIndicesToRemove[columnIndex];
           if (set.has(rowIndex)) {
             throw new Error("wtf"); // Duplicate.
           }
           set.add(rowIndex);
-          promises.push(
-            this.animator.destroyPiece(this.#allPieces[rowIndex][column])
+          return this.animator.destroyPiece(
+            this.#allPieces[rowIndex][columnIndex]
           );
-        });
-      });
+        }
+      );
       await Promise.all(promises);
     }
     /**

@@ -15,7 +15,7 @@ import { assertClass, positiveModulo } from "./utility";
 
 /**
  * This is where we are documenting what will be added to the score.
- * 
+ *
  * Presumably at some time I'll add points to each of these, and keep a running tally.
  * That's why I use terms like `addToScore()` and `newScoreDiv`.
  */
@@ -119,7 +119,7 @@ const decorationColors: ReadonlyMap<Color, ReadonlyArray<string>> = new Map([
 /**
  * A set of interesting characters.
  * This program uses these characters to mark which elements are part of which groups.
- * 
+ *
  * I chose this in part because it was easy to do.
  * And in part because it looks artistic.
  * And in part because its fun to go looking for new interesting unicode characters.
@@ -245,7 +245,9 @@ const boardElement = getById("board", SVGElement);
 
 function clearAllDecorations() {
   boardElement
-    .querySelectorAll<SVGTextElement>("text.crystal-decoration")
+    .querySelectorAll<SVGTextElement>(
+      "text.crystal-decoration,text.crystal-decoration-background"
+    )
     .forEach((element) => (element.textContent = ""));
 }
 
@@ -265,19 +267,28 @@ class GuiPiece {
   ).content.querySelector("g")!;
   readonly element: SVGGElement;
   readonly decorationElement: SVGTextElement;
+  readonly decorationBackgroundElement: SVGTextElement;
+
+  private readonly bombElement: SVGPathElement;
+  get bombVisible(): boolean {
+    return this.bombElement.style.display == "";
+  }
+  set bombVisible(visible: boolean) {
+    this.bombElement.style.display = visible ? "" : "none";
+  }
 
   /**
-   * This is part of an optimization.  This avoids my code translating the 
+   * This is part of an optimization.  This avoids my code translating the
    * instructions into a string, and the API parsing the values back out.
    */
   static readonly #positionColumn = CSS.px(Math.E);
   /**
-   * This is part of an optimization.  This avoids my code translating the 
+   * This is part of an optimization.  This avoids my code translating the
    * instructions into a string, and the API parsing the values back out.
    */
   static readonly #positionRow = CSS.px(Math.PI);
   /**
-   * This is part of an optimization.  This avoids my code translating the 
+   * This is part of an optimization.  This avoids my code translating the
    * instructions into a string, and the API parsing the values back out.
    */
   static readonly #positionHelper = new CSSTransformValue([
@@ -387,11 +398,11 @@ class GuiPiece {
     await this.element.animate({ transform, offset }, options).finished;
   }
 
-  /** 
+  /**
    * The next animation should start from here.
    */
   #rowIndex = NaN;
-  /** 
+  /**
    * The next animation should start from here.
    */
   #columnIndex = NaN;
@@ -402,9 +413,15 @@ class GuiPiece {
     );
     this.element = clone;
     this.decorationElement = clone.querySelector("text.crystal-decoration")!;
-    clone.setAttribute("fill", piece.color);
+    this.decorationBackgroundElement = clone.querySelector(
+      "text.crystal-decoration-background"
+    )!;
+    this.bombElement = clone.querySelector(".bomb")!;
+    clone.style.fill = piece.color;
+    this.decorationBackgroundElement.style.stroke = piece.color;
+    this.bombElement.style.fill = pick(decorationColors.get(piece.color)!);
+    this.bombVisible = false;
     this.updateFinalPosition(piece);
-    //TODO bomb
     boardElement.appendChild(clone);
   }
   async remove(): Promise<void> {
@@ -522,6 +539,12 @@ const makeScript = (initialPosition: number, finalPosition: number) => {
 };
 
 class AnimatorImpl implements Animator {
+  cancelGroup(piece: Piece): void {
+    const guiPiece = this.#guiPieces.get(piece)!;
+    guiPiece.element.getAnimations().forEach((animation) => animation.cancel());
+    guiPiece.decorationElement.textContent = "";
+    guiPiece.decorationBackgroundElement.textContent = "";
+  }
   #guiPieces = new Map<Piece, GuiPiece>();
   initializePiece(piece: Piece): void {
     this.#guiPieces.set(piece, new GuiPiece(piece));
@@ -562,9 +585,9 @@ class AnimatorImpl implements Animator {
     );
     await Promise.all(promises);
   }
-  updateBomb(piece: Piece): void {
-    piece;
-    throw new Error("Method not implemented.");
+  updateBomb(piece: Piece, bombVisible: boolean): void {
+    const guiPiece = this.#guiPieces.get(piece)!;
+    guiPiece.bombVisible = bombVisible;
   }
 
   assignGroupDecorations(
@@ -627,6 +650,7 @@ class AnimatorImpl implements Animator {
             };
             guiPieces.forEach((guiPiece) => {
               guiPiece.decorationElement.animate(keyframes, options);
+              guiPiece.decorationBackgroundElement.animate(keyframes, options);
             });
           });
           if (counter < 2) {
@@ -662,6 +686,8 @@ class AnimatorImpl implements Animator {
                 const decorationElement = guiPiece.decorationElement;
                 decorationElement.textContent = decorationText;
                 decorationElement.style.fill = decorationColor;
+                guiPiece.decorationBackgroundElement.textContent =
+                  decorationText;
               });
             }
           );
