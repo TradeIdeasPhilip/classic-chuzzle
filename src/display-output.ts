@@ -585,9 +585,9 @@ class AnimatorImpl implements Animator {
     );
     await Promise.all(promises);
   }
-  updateBomb(piece: Piece, bombVisible: boolean): void {
+  updateBomb(piece: Piece): void {
     const guiPiece = this.#guiPieces.get(piece)!;
-    guiPiece.bombVisible = bombVisible;
+    guiPiece.bombVisible = piece.bomb;
   }
 
   assignGroupDecorations(

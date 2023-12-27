@@ -2,7 +2,7 @@
  * This file exports findActionable() and hides a lot of the details.
  */
 
-import { Color, Piece } from "./logical-board";
+import { Color } from "./logical-board";
 
 /**
  * This is all we really need from the Piece class.
@@ -161,20 +161,10 @@ class GroupCell {
   }
 }
 
-/**
- * Each entry in this array represents one group.
- *
- * Although this has the same type signature as `AllPieces`, these are
- * both used in completely different ways.  For one thing, the arrays
- * involved with `AllPieces` all have length of `LogicalBoard.SIZE`.
- * The arrays involved with `Groups` are of all different sizes.
- */
-export type Groups = ReadonlyArray<ReadonlyArray<Piece>>;
-
-export function findActionable(
-  allPieces: ReadonlyArray<ReadonlyArray<Piece>>
-): Groups {
+export function findActionable<T extends HasColor>(
+  allPieces: ReadonlyArray<ReadonlyArray<T>>
+): ReadonlyArray<ReadonlyArray<T>> {
   return GroupCell.findActionable(allPieces).map(
-    (group) => group.contents as Piece[]
+    (group) => group.contents as T[]
   );
 }

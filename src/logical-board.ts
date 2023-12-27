@@ -18,7 +18,7 @@
  */
 
 import { initializedArray, pick } from "phil-lib/misc";
-import { Groups, findActionable } from "./groups";
+import { findActionable } from "./groups";
 import { positiveModulo, rotateArray } from "./utility";
 
 /**
@@ -120,6 +120,7 @@ export type Piece = {
   readonly rowIndex: number;
   readonly columnIndex: number;
   readonly color: Color;
+  readonly bomb: boolean;
 };
 
 class LogicalPiece implements Piece {
@@ -127,13 +128,7 @@ class LogicalPiece implements Piece {
    * A placeholder.  Eventually I need to deal with 2⨉2 pieces.
    */
   readonly weight = 1;
-  #bomb = false;
-  get bomb() {
-    return this.#bomb;
-  }
-  set bomb(value) {
-    this.#bomb = value;
-  }
+  bomb = false;
   constructor(
     public rowIndex: number,
     public columnIndex: number,
@@ -159,6 +154,8 @@ export type PointerActions = {
    */
   release(offset: number): Promise<void>;
 };
+
+type Groups = readonly (readonly LogicalPiece[])[];
 
 /**
  * This controls all of the groups on the screen at once.
@@ -260,13 +257,12 @@ export type Animator = {
     pieces: readonly Piece[]
   ): Promise<void>;
   /**
-   * Update the GUI to match the state of `piece.bomb`.
-   * Presumably the GUI will draw a 💣 emoji on the cell if `piece.bomb == true`.
-   * Presumably `piece.bomb` will only change from false to true.
+   * Update the GUI.
+   * Presumably the GUI will draw a picture of a bomb on the cell if `piece.bomb == true`.
    * @param piece This was the input to a previous call to `initializePiece()`.
-   * @param bombVisible If true, show the bomb.  If false, hid the bomb.
+   * See `piece.bomb` to know if the GUI should show the bomb or not.
    */
-  updateBomb(piece: Piece, bombVisible: boolean): void;
+  updateBomb(piece: Piece): void;
   assignGroupDecorations(groups: Groups): GroupGroupActions;
   cancelGroup(piece: Piece): void;
 };
@@ -353,15 +349,21 @@ export class LogicalBoard {
   private async updateLoop(groups: Groups, actions: GroupGroupActions) {
     for (let counter = 1; groups.length > 0; counter++) {
       const immuneFromDestruction = new Set<Piece>();
+      const needToHideGroupDecorations: LogicalPiece[] = [];
       groups.forEach((group) => {
         if (group.length == 5) {
-          const addBombToThisPiece = pick(group);
+          const addBombToThisPiece = pick(group); // TODO pick the middle piece.
+          addBombToThisPiece.bomb = true;
           immuneFromDestruction.add(addBombToThisPiece);
-          this.animator.cancelGroup(addBombToThisPiece);
-          this.animator.updateBomb(addBombToThisPiece, true);
+          this.animator.updateBomb(addBombToThisPiece);
+          needToHideGroupDecorations.push(addBombToThisPiece);
         }
       });
       await actions.addToScore(counter);
+      needToHideGroupDecorations.forEach((logicalPiece) =>
+        this.animator.cancelGroup(logicalPiece)
+      );
+
       await this.removePieces(
         groups.flatMap((group) =>
           group.filter((piece) => !immuneFromDestruction.has(piece))
