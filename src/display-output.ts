@@ -223,6 +223,13 @@ const decorations: ReadonlyArray<string> = [
 ];
 
 /**
+ * 1 means to display the animations at normal speed.
+ * 0.5 means to display them at twice the normal speed.
+ * I.e. when specifying the duration for an animation, multiply it by this number first.
+ */
+let durationFactor = 1;
+
+/**
  *
  * @param needToMove How far, in svg units, the tile will move.
  * @returns A reasonable set of animation options.
@@ -231,7 +238,8 @@ function animationOptions(needToMove: number): KeyframeAnimationOptions {
   /**
    * Two seconds if you go all the way across the board.
    */
-  const duration = (Math.abs(needToMove) * 2000) / LogicalBoard.SIZE;
+  const duration =
+    ((Math.abs(needToMove) * 2000) / LogicalBoard.SIZE) * durationFactor;
   return {
     duration,
     //easing: "ease-in-out",
@@ -626,8 +634,27 @@ class AnimatorImpl implements Animator {
         });
         return { guiPieces, decorationColor, decorationText, backgroundColor };
       });
+      /**
+       *
+       * @param counter 1 for the first thing you want to show off in a group.
+       * Larger numbers for as the process keeps repeating.
+       */
+      const updateAnimationSpeed = (counter: number) => {
+        /**
+         * This is the asymptote.  The duration will constantly approach this as counter grows.
+         */
+        const floor = 0.1;
+        const adjustable = 1 - floor;
+        /**
+         * How much to decay each time the counter goes up by 1.
+         */
+        const decay = 0.8;
+        durationFactor = Math.pow(decay, counter - 1) * adjustable + floor;
+        console.log({ counter, durationFactor });
+      };
       return {
         async addToScore(counter: number) {
+          updateAnimationSpeed(counter);
           // Flash the items about to be collected.
           savedGroupInfo.forEach(({ guiPieces }) => {
             const maxOpacity = 1;
@@ -643,7 +670,7 @@ class AnimatorImpl implements Animator {
                 "normal",
                 "reverse",
               ]),
-              duration: 550 + Math.random() * 150,
+              duration: (550 + Math.random() * 150) * durationFactor,
               easing: pick(["linear", "ease-in", "ease-out", "ease-in-out"]),
               iterationStart: Math.random(),
               iterations: Infinity,
