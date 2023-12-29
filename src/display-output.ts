@@ -650,7 +650,6 @@ class AnimatorImpl implements Animator {
          */
         const decay = 0.8;
         durationFactor = Math.pow(decay, counter - 1) * adjustable + floor;
-        console.log({ counter, durationFactor });
       };
       return {
         async addToScore(counter: number) {

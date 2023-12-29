@@ -54,32 +54,37 @@ initializeUserInputs(new LogicalBoard(animator));
   // Test math-to-path.ts
   const path = spiralPath({ x: 1.5, y: 1.5 }, { x: 3.5, y: 4.5 }, 3);
   const svg = getById("main", SVGSVGElement);
-  path||svg;
+  path || svg;
 
-  /*
-  const pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  pathElement.style.fill="none";
-  pathElement.style.stroke="black";
+  const pathElement = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "path"
+  );
+  pathElement.style.fill = "none";
+  pathElement.style.stroke = "black";
   pathElement.style.strokeWidth = "0.07px";
-  pathElement.style.strokeLinecap="round";
+  pathElement.style.strokeLinecap = "round";
   pathElement.setAttribute("d", path);
   svg.appendChild(pathElement);
-  console.log(path,pathElement);
-  */
+  console.log(path, pathElement);
 
-  /*
-  const circleElement = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-  circleElement.style.fill="rgba(255,255,255 , 0.9)";
-  circleElement.r.baseVal.value=0.25;
-  circleElement.style.offsetPath = `path("${path}")` ;
+  const circleElement = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "circle"
+  );
+  circleElement.style.fill = "rgba(255,255,255 , 0.9)";
+  circleElement.r.baseVal.value = 0.25;
+  circleElement.style.offsetPath = `path("${path}")`;
   svg.appendChild(circleElement);
- 
-  const textElement = document.createElementNS("http://www.w3.org/2000/svg", "text");
-  textElement.textContent="💣";
-  textElement.style.fontSize="0.25px";
+
+  const textElement = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "text"
+  );
+  textElement.textContent = "💣";
+  textElement.style.fontSize = "0.25px";
   textElement.style.offsetPath = circleElement.style.offsetPath;
   textElement.style.offsetRotate = "0deg";
   //    text-shadow: 4px 4px 2px white, -4px 4px 2px white, 4px -4px 2px white, -4px -4px 2px white;
- svg.appendChild( textElement);
- */
+  svg.appendChild(textElement);
 }
