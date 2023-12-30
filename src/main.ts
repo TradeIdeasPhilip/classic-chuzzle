@@ -3,7 +3,13 @@ import { getById } from "phil-lib/client-misc";
 import { LogicalBoard, colors } from "./logical-board";
 import { animator } from "./display-output";
 import { initializeUserInputs } from "./user-input";
-import { spiralPath } from "./math-to-path";
+import {
+  makeCircle,
+  makeComposite,
+  mathToPath,
+  spiralPath,
+} from "./math-to-path";
+import { assertClass } from "./utility";
 
 {
   // TITLE BAR
@@ -52,22 +58,95 @@ initializeUserInputs(new LogicalBoard(animator));
 
 {
   // Test math-to-path.ts
-  const path = spiralPath({ x: 1.5, y: 1.5 }, { x: 3.5, y: 4.5 }, 3);
   const svg = getById("main", SVGSVGElement);
-  path || svg;
+  const newBomb = () => {
+    const template = getById(
+      "piece",
+      HTMLTemplateElement
+    ).content.querySelector(".bomb")!;
+    const result = assertClass(template.cloneNode(true), SVGPathElement);
+    return result;
+  };
 
-  const pathElement = document.createElementNS(
-    "http://www.w3.org/2000/svg",
-    "path"
-  );
-  pathElement.style.fill = "none";
-  pathElement.style.stroke = "black";
-  pathElement.style.strokeWidth = "0.07px";
-  pathElement.style.strokeLinecap = "round";
-  pathElement.setAttribute("d", path);
-  svg.appendChild(pathElement);
-  console.log(path, pathElement);
+  {
+    const path = spiralPath({ x: 1, y: 1 }, { x: 3, y: 4 }, 1.5);
+    const pathElement = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "path"
+    );
+    pathElement.style.fill = "none";
+    pathElement.style.stroke = "white";
+    pathElement.style.strokeWidth = "0.02px";
+    pathElement.style.strokeLinecap = "round";
+    pathElement.style.transform = "translate(0.5px,0.5px)";
+    pathElement.setAttribute("d", path);
+    svg.appendChild(pathElement);
+    const bombElement = newBomb();
+    bombElement.style.fill = "black";
+    const bombHolder = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "g"
+    );
+    bombHolder.appendChild(bombElement);
+    svg.appendChild(bombHolder);
+    //bombHolder.style.transform="translate(1px,2px)";
+    bombHolder.style.offsetPath = `path('${path}')`;
+    bombHolder.style.offsetRotate = "0deg";
+    bombHolder.animate(
+      { offsetDistance: ["0%", "100%"] },
+      { duration: 3000, iterations: Infinity, easing: "ease-in-out" }
+    );
 
+    console.log({ path, pathElement, bombElement, bombHolder });
+  }
+  {
+    const f = makeComposite(
+      { x: 1, y: 1 },
+      { x: 3, y: 4 },
+      makeCircle(1, Math.PI, 4 * Math.PI)
+    );
+    const path = mathToPath(f, { numberOfSegments: 20 });
+    const pathElement = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "path"
+    );
+    pathElement.style.fill = "none";
+    pathElement.style.stroke = "blue";
+    pathElement.style.strokeWidth = "0.02px";
+    pathElement.style.strokeLinecap = "round";
+    pathElement.style.transform = "translate(0.5px,0.5px)";
+    pathElement.setAttribute("d", path);
+    svg.appendChild(pathElement);
+
+    const bombElement = newBomb();
+    bombElement.style.fill = "lightblue";
+    const bombHolder = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "g"
+    );
+    bombHolder.appendChild(bombElement);
+    svg.appendChild(bombHolder);
+    //bombHolder.style.transform="translate(1px,2px)";
+    bombHolder.style.offsetPath = `path('${path}')`;
+    bombHolder.style.offsetRotate = "0deg";
+    bombHolder.animate(
+      [
+        { offset: 0, offsetDistance: "0%", easing: "ease-in-out" },
+        { offset: 0.95, offsetDistance: "100%", easing: "ease-in-out" },
+        { offset: 1, offsetDistance: "100%", easing: "ease-in-out" },
+      ],
+      {
+        duration: 3000,
+        iterations: Infinity,
+        easing: "ease-in-out",
+        iterationStart: 0.5,
+      }
+    );
+
+    console.log(path, pathElement);
+  }
+
+  /*
   const circleElement = document.createElementNS(
     "http://www.w3.org/2000/svg",
     "circle"
@@ -87,4 +166,5 @@ initializeUserInputs(new LogicalBoard(animator));
   textElement.style.offsetRotate = "0deg";
   //    text-shadow: 4px 4px 2px white, -4px 4px 2px white, 4px -4px 2px white, -4px -4px 2px white;
   svg.appendChild(textElement);
+  */
 }

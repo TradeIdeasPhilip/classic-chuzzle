@@ -1,8 +1,5 @@
-import {
-  initializedArray,
-  makeLinear,
-  polarToRectangular,
-} from "phil-lib/misc";
+import { initializedArray, makeLinear } from "phil-lib/misc";
+import { polarToRectangular } from "./utility";
 
 type Point = { readonly x: number; readonly y: number };
 
@@ -57,7 +54,7 @@ function getDirection(f: VectorFunction, t: number, ε: number) {
   if (Δx == 0 && Δy == 0) {
     return NaN;
   }
-  return Math.atan2(Δx, Δy);
+  return Math.atan2(Δy, Δx);
 }
 
 /**
@@ -92,12 +89,12 @@ export function mathToPath(f: VectorFunction, options: Options = {}) {
       {
         x0: segment.from.point.x,
         y0: segment.from.point.y,
-        slope: 1 / Math.tan(segment.from.direction),
+        slope: Math.tan(segment.from.direction),
       },
       {
         x0: segment.to.point.x,
         y0: segment.to.point.y,
-        slope: 1 / Math.tan(segment.to.direction),
+        slope: Math.tan(segment.to.direction),
       }
     );
     if (controlPoint) {
@@ -118,6 +115,27 @@ export function mathToPath(f: VectorFunction, options: Options = {}) {
  * @returns A path appropriate for use in CSS and SVG.
  */
 export function spiralPath(from: Point, to: Point, numberOfTurns: number) {
+  const f = makeSpiral(from, to, numberOfTurns);
+  return mathToPath(f, { numberOfSegments: numberOfTurns * 9.001002 });
+}
+
+/**
+ *
+ * @param from The staring point of the path.
+ * The point to draw at t==0.
+ * This is on the outside of the spiral.
+ * @param to The ending point of the path.
+ * The point to draw at t==1.
+ * This is at the center of the spiral.
+ * @param numberOfTurns This should be a positive number.  Bigger numbers make longer paths.
+ * @returns A function appropriate for input to `mathToPath()` or `makeComposite()`.
+ */
+export function makeSpiral(
+  from: Point,
+  to: Point,
+  numberOfTurns: number
+): VectorFunction {
+  //debugger;
   const startTime = 0;
   const endTime = 1;
   const straightBack: Point = { x: from.x - to.x, y: from.y - to.y };
@@ -130,13 +148,92 @@ export function spiralPath(from: Point, to: Point, numberOfTurns: number) {
     endTime,
     initialAngle + numberOfTurns * 2 * Math.PI
   );
-  function f(t: number): Point {
+  return function (t: number): Point {
     const radius = getRadius(t);
     const angle = getAngle(t);
     const offset = polarToRectangular(radius, angle);
     return { x: to.x + offset.x, y: to.y + offset.y };
-  }
-  return mathToPath(f, { numberOfSegments: numberOfTurns * 9.001002 });
+  };
+}
+
+/**
+ * Create a circle suitable for input to `mathToPath()` or `makeComposite()`.
+ *
+ * The circle is centered at the origin.
+ * The assumption is that `makeComposite()` will translate the result anyway.
+ * @param radius The radius of the circle to create.
+ * @param initialAngle Where on the circle to start, in radians.
+ * @param finalAngle Where on the circle to end, in radians.
+ *
+ * Set finalAngle = initialAngle + (n ⨉ 2π) to make n complete loops around.
+ * Make n negative to go the other direction.
+ * @returns A function that will trace out a circle n times.
+ */
+export function makeCircle(
+  radius: number,
+  initialAngle: number,
+  finalAngle: number
+): VectorFunction {
+  const angle = makeLinear(0, initialAngle, 1, finalAngle);
+  return (t: number): Point => {
+    return polarToRectangular(radius, angle(t));
+  };
+}
+
+/**
+ *
+ * @param from Start at this point at t==0.
+ * @param to End at this point at t==1.
+ * @returns A function suitable for input to `mathToPath()` or `makeComposite()`.
+ * The function will linearly interpolate between the start and end points.
+ */
+function makeLine(from: Point, to: Point): VectorFunction {
+  const x = makeLinear(0, from.x, 1, to.x);
+  const y = makeLinear(0, from.y, 1, to.y);
+  return (t: number): Point => {
+    return { x: x(t), y: y(t) };
+  };
+}
+
+/**
+ * Make a path with specific start and end points.
+ * Use the additional functions to make the path more interesting.
+ * This adds the results of the functions together, like wheels of a Spirograph.
+ * This adds additional terms to make the start and end points match.
+ * @param from The resulting function will return this point at t==0.
+ * @param to The resulting function will return this point at t==1.
+ * @param functions Add all of these functions together to get a result.
+ * @returns A function that will have the given end points.
+ * The input functions are used to add flourishes between the two ends.
+ */
+export function makeComposite(
+  from: Point,
+  to: Point,
+  ...functions: VectorFunction[]
+): VectorFunction {
+  const sumAt = (t: number): Point => {
+    const result = { x: 0, y: 0 };
+    functions.forEach((f) => {
+      const point = f(t);
+      result.x += point.x;
+      result.y += point.y;
+    });
+    return result;
+  };
+  const initialFrom = sumAt(0);
+  const initialTo = sumAt(1);
+  const adjustment = makeLine(
+    { x: from.x - initialFrom.x, y: from.y - initialFrom.y },
+    { x: to.x - initialTo.x, y: to.y - initialTo.y }
+  );
+  functions.push(adjustment);
+  console.log({
+    desiredFrom: from,
+    computedFrom: sumAt(0),
+    desiredTo: to,
+    computedTo: sumAt(1),
+  });
+  return sumAt;
 }
 
 // TODO these should really be rays.  Two rays might not meet at all.

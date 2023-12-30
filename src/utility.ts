@@ -80,3 +80,8 @@ export function assertClass<T extends object, ARGS extends any[]>(
   }
   throw new Error("wtf");
 }
+
+// This is dead wrong in phil-lib/misc.ts!!!
+export function polarToRectangular(r: number, θ: number) {
+  return { x: Math.cos(θ) * r, y: Math.sin(θ) * r };
+}
