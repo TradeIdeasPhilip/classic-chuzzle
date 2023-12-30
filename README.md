@@ -25,3 +25,7 @@ This is a nice example of the [Web Animations API](https://developer.mozilla.org
 I wish I'd learned about that much sooner.
 It's a way to do animations with only JavaScript.
 No CSS.
+
+I'm really starting to like math-to-path.ts.
+This is an extension of an [idea I've used before](https://github.com/TradeIdeasPhilip/divide-by-zero/blob/master/src/svg-sine-wave.ts).
+This version is much more general.

@@ -69,7 +69,7 @@ initializeUserInputs(new LogicalBoard(animator));
   };
 
   {
-    const path = spiralPath({ x: 1, y: 1 }, { x: 3, y: 4 }, 1.5);
+    const path = spiralPath({ x: 1, y: 1 }, { x: 3, y: 4 }, 0.5+Math.random()*2+Math.random()*2);
     const pathElement = document.createElementNS(
       "http://www.w3.org/2000/svg",
       "path"
@@ -100,10 +100,23 @@ initializeUserInputs(new LogicalBoard(animator));
     console.log({ path, pathElement, bombElement, bombHolder });
   }
   {
+    /**
+     * Any random angle.
+     */
+    const initialAngle = Math.random() * 2 * Math.PI;
+    /**
+     * Clockwise or counterclockwise.  50%/50% odds.
+     */
+    const direction = ((Math.random() * 2)|0)*2-1;
+    /**
+     * Between ½ and 2½ complete rotations.
+     */
+    const finalAngle = initialAngle + direction * (0.5+Math.random()*2) * 2*Math.PI;
+    const radius=0.5+Math.random()*2;
     const f = makeComposite(
       { x: 1, y: 1 },
       { x: 3, y: 4 },
-      makeCircle(1, Math.PI, 4 * Math.PI)
+      makeCircle(radius, initialAngle, finalAngle)
     );
     const path = mathToPath(f, { numberOfSegments: 20 });
     const pathElement = document.createElementNS(
@@ -119,7 +132,7 @@ initializeUserInputs(new LogicalBoard(animator));
     svg.appendChild(pathElement);
 
     const bombElement = newBomb();
-    bombElement.style.fill = "lightblue";
+    bombElement.style.fill = "cyan";
     const bombHolder = document.createElementNS(
       "http://www.w3.org/2000/svg",
       "g"
