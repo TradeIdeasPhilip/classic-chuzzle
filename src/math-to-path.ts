@@ -82,7 +82,6 @@ export function mathToPath(f: VectorFunction, options: Options = {}) {
     numberOfSegments,
     (index) => [{ from: samples[index], to: samples[index + 1] }][0]
   );
-  console.log({ samples, segments });
   let result = `M ${segments[0].from.point.x}, ${segments[0].from.point.y}`;
   segments.forEach((segment) => {
     const controlPoint = findIntersection(
@@ -227,12 +226,6 @@ export function makeComposite(
     { x: to.x - initialTo.x, y: to.y - initialTo.y }
   );
   functions.push(adjustment);
-  console.log({
-    desiredFrom: from,
-    computedFrom: sumAt(0),
-    desiredTo: to,
-    computedTo: sumAt(1),
-  });
   return sumAt;
 }
 

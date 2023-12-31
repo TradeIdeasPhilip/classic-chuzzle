@@ -702,7 +702,7 @@ class AnimatorImpl implements Animator {
               newScoreDiv.appendChild(span);
             }
           );
-          await sleep(2000);
+          await sleep(2000*durationFactor);
         },
         highlightGroups() {
           clearAllDecorations();
