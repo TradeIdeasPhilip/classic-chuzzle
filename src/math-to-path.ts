@@ -1,7 +1,7 @@
 import { initializedArray, makeLinear } from "phil-lib/misc";
 import { polarToRectangular } from "./utility";
 
-type Point = { readonly x: number; readonly y: number };
+export type Point = { readonly x: number; readonly y: number };
 
 type Options = {
   /**

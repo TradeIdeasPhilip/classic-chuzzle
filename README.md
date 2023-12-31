@@ -6,6 +6,7 @@ Missing a lot, but playable.
 
 Sometimes I display bombs.
 But they don't explode yet.
+Watch bombs fly around like crazy: https://youtu.be/IjQcdktLzLY.
 
 ## How to Play
 
