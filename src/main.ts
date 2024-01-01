@@ -1,7 +1,7 @@
 import "./style.css";
 import { getById } from "phil-lib/client-misc";
 import { LogicalBoard, colors } from "./logical-board";
-import { animator } from "./display-output";
+import { animator, decorationColors } from "./display-output";
 import { initializeUserInputs } from "./user-input";
 import {
   Point,
@@ -11,7 +11,7 @@ import {
   spiralPath,
 } from "./math-to-path";
 import { assertClass } from "./utility";
-import { sleep } from "phil-lib/misc";
+import { pick, sleep } from "phil-lib/misc";
 
 {
   // TITLE BAR
@@ -93,11 +93,13 @@ async function testMathToPath() {
   pathElement.style.transform = "translate(0.5px,0.5px)";
   svg.appendChild(pathElement);
   const bombElement = newBomb();
-  bombElement.style.fill = "black";
+  const bombBackgroundElement = newBomb();
+  bombBackgroundElement.style.strokeWidth = "75";
   const bombHolder = document.createElementNS(
     "http://www.w3.org/2000/svg",
     "g"
   );
+  bombHolder.appendChild(bombBackgroundElement);
   bombHolder.appendChild(bombElement);
   svg.appendChild(bombHolder);
   bombHolder.style.offsetRotate = "0deg";
@@ -106,6 +108,13 @@ async function testMathToPath() {
   while (true) {
     const from = to;
     to = randomNewPoint(from);
+
+    {
+      const backgroundColor = pick(colors);
+      const foregroundColor = pick(decorationColors.get(backgroundColor)!);
+      bombElement.style.fill = foregroundColor;
+      bombBackgroundElement.style.stroke = backgroundColor;
+    }
 
     let path: string;
     if (Math.random() < 0.3333333) {

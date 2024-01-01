@@ -31,7 +31,10 @@ const chainBonusDiv = getById("chainBonus", HTMLDivElement);
  * The keys are background colors, i.e the colors of the cells.
  * The values are foreground colors that go well with each background color.
  */
-const decorationColors: ReadonlyMap<Color, ReadonlyArray<string>> = new Map([
+export const decorationColors: ReadonlyMap<
+  Color,
+  ReadonlyArray<string>
+> = new Map([
   [
     "orange",
     [
@@ -702,7 +705,7 @@ class AnimatorImpl implements Animator {
               newScoreDiv.appendChild(span);
             }
           );
-          await sleep(2000*durationFactor);
+          await sleep(2000 * durationFactor);
         },
         highlightGroups() {
           clearAllDecorations();

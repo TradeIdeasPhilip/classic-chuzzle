@@ -265,6 +265,9 @@ export type Animator = {
   updateBomb(piece: Piece): void;
   assignGroupDecorations(groups: Groups): GroupGroupActions;
   cancelGroup(piece: Piece): void;
+
+  // TODO
+  //flingBomb(from, to, startTime, endTime)
 };
 
 /**
@@ -358,7 +361,14 @@ export class LogicalBoard {
           this.animator.updateBomb(addBombToThisPiece);
           needToHideGroupDecorations.push(addBombToThisPiece);
         }
+        // TODO if group length == 6, record the details so we can add the bomb animation soon.
       });
+      //TODO addToScore should return a number of milliseconds.
+      // Do the hide decorations after that time.
+      // Start remove pieces sooner, but make sure it knows how
+      // long addToScore() suggested it wait to start its animations.
+      // removePieces() will have to fling the bombs, as only it will
+      // have all the required information.
       await actions.addToScore(counter);
       needToHideGroupDecorations.forEach((logicalPiece) =>
         this.animator.cancelGroup(logicalPiece)
