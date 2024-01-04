@@ -17,9 +17,9 @@
  * can update separately; you don't need any special coordination between the sides.
  */
 
-import { initializedArray, pick } from "phil-lib/misc";
+import { initializedArray, pick, sleep } from "phil-lib/misc";
 import { findActionable } from "./groups";
-import { positiveModulo, rotateArray } from "./utility";
+import { positiveModulo, rotateArray, take } from "./utility";
 
 /**
  * If the user let go now, how many cells should we try to rotate?
@@ -168,7 +168,7 @@ export type GroupGroupActions = {
    * @param counter How many times in a rowIndex we've collected a group since the user's last move.  1 for the first time,
    * 2 for the second, etc.
    */
-  addToScore(counter: number): Promise<void>;
+  addToScore(counter: number): void;
   /**
    * Show which pieces are about to be collected or would hypothetically
    * be collected if the user let go now.
@@ -187,18 +187,6 @@ export type Animator = {
    * key in a `Map`.
    */
   initializePiece(piece: Piece): void;
-  /**
-   *
-   * @param piece The piece we are done with.
-   *
-   * This object will never be used again.  The GUI can and should release
-   * any resources associated with this object.
-   * @returns This promise will resolve after the animation completes.
-   * The caller is expected to destroy several pieces at
-   * once and await the completion of `All()` of the animations.
-   * However, that is not required.
-   */
-  destroyPiece(piece: Piece): Promise<void>;
 
   /**
    * Move the GuiPiece to the position specified in the given LogicalPiece.
@@ -207,17 +195,6 @@ export type Animator = {
    */
   jumpTo(piece: Piece): void;
 
-  /**
-   * Move the GuiPiece to the position specified in the given LogicalPiece.
-   * Animate the move from the GUI element's current position to this new position, then leave this element in its new position.
-   * The element will move along a straight line.
-   * @param piece This was the input to a previous call to `initializePiece()`.
-   * @returns This promise will resolve after the animation completes.
-   * Do not call updatePosition*(), drawPreview(), slide() or destroyPiece() on this piece again.
-   * It is okay to change bomb status and decorations, but don't try to move
-   * this piece again until this move is complete.
-   */
-  slideTo(piece: Piece): Promise<void>;
   /**
    * When the user is dragging the mouse we send constant updates to the GUI.
    * @param direction Which coordinate to keep fixed and which to change.
@@ -256,18 +233,45 @@ export type Animator = {
     direction: "vertical" | "horizontal",
     pieces: readonly Piece[]
   ): Promise<void>;
-  /**
-   * Update the GUI.
-   * Presumably the GUI will draw a picture of a bomb on the cell if `piece.bomb == true`.
-   * @param piece This was the input to a previous call to `initializePiece()`.
-   * See `piece.bomb` to know if the GUI should show the bomb or not.
-   */
-  updateBomb(piece: Piece): void;
   assignGroupDecorations(groups: Groups): GroupGroupActions;
-  cancelGroup(piece: Piece): void;
 
-  // TODO
-  //flingBomb(from, to, startTime, endTime)
+  updateBoard(request: UpdateInstructions): Promise<void>;
+};
+
+export type UpdateInstructions = {
+  /**
+   * New pieces that the GUI has not seen before.
+   */
+  add: {
+    initialRow: number;
+    piece: Piece;
+  }[];
+  /**
+   * Each of these pieces will be flung off the board,
+   * never to be seen or heard from again.
+   */
+  remove: Piece[];
+  /**
+   * This is aimed a a group of 6 cells.  Each of the 6 gets
+   * assigned a bomb.  Then the bomb moves to another cell
+   * as the initial cell is about to be cleared.
+   *
+   * The top level array contains one entry per group.
+   * Each group is an array of pieces.
+   * The animations for each piece in a group are offset slightly in time.
+   * If there are multiple groups, they can overlap in time.
+   */
+  flingBomb: [from: Piece, to: Piece][][];
+  /**
+   * 1 if the user just made a move.  I.e. 1st move in the series.
+   * 2 if this is the first automatic move after the user's move.  I.e. 2nd move in the series.
+   * Increment for each move in the series.
+   *
+   * The affects the speed of the animations.
+   * They start slow so you can see what's going on.
+   * And they speed up so you don't get bored.
+   */
+  counter: number;
 };
 
 /**
@@ -352,36 +356,81 @@ export class LogicalBoard {
   private async updateLoop(groups: Groups, actions: GroupGroupActions) {
     for (let counter = 1; groups.length > 0; counter++) {
       const immuneFromDestruction = new Set<Piece>();
-      const needToHideGroupDecorations: LogicalPiece[] = [];
+      const bombFlingingSources: (readonly LogicalPiece[])[] = [];
+      /** TODO
+       * Display groups and make them flash and add them to the scoreboard.
+       * Mark some things as bombs and other things as need to destroy.
+       * Find the final positions
+       * call Animator.updateBoard()!
+       *   does this:
+       *
+       * source location should always be what's in the GuiPiece when this request comes in.
+       * destination location should always be what's in the LogicalPiece
+       *
+       * Add Animator.newBoard()?
+       * Init all new pieces in newBoard() or updateBoard().
+       * Remove initializePiece() and destroyPiece() from Animator.
+       * And hopefully remove a few more exports from Animator.
+       */
       groups.forEach((group) => {
-        if (group.length == 5) {
-          const addBombToThisPiece = pick(group); // TODO pick the middle piece.
-          addBombToThisPiece.bomb = true;
-          immuneFromDestruction.add(addBombToThisPiece);
-          this.animator.updateBomb(addBombToThisPiece);
-          needToHideGroupDecorations.push(addBombToThisPiece);
+        switch (group.length) {
+          case 3:
+          case 6: {
+            bombFlingingSources.push(group);
+            break;
+          }
+          case 5: {
+            const addBombToThisPiece = pick(group); // TODO pick the middle piece.
+            addBombToThisPiece.bomb = true;
+            immuneFromDestruction.add(addBombToThisPiece);
+            break;
+          }
         }
-        // TODO if group length == 6, record the details so we can add the bomb animation soon.
       });
-      //TODO addToScore should return a number of milliseconds.
-      // Do the hide decorations after that time.
-      // Start remove pieces sooner, but make sure it knows how
-      // long addToScore() suggested it wait to start its animations.
-      // removePieces() will have to fling the bombs, as only it will
-      // have all the required information.
-      await actions.addToScore(counter);
-      needToHideGroupDecorations.forEach((logicalPiece) =>
-        this.animator.cancelGroup(logicalPiece)
-      );
+      actions.addToScore(counter);
 
-      await this.removePieces(
-        groups.flatMap((group) =>
-          group.filter((piece) => !immuneFromDestruction.has(piece))
-        )
+      const piecesToRemove = groups.flatMap((group) =>
+        group.filter((piece) => !immuneFromDestruction.has(piece))
       );
+      const piecesToAdd = this.removePieces(piecesToRemove);
+
+      const availableDestinations = this.#allPieces
+        .flat()
+        .filter((piece) => !piece.bomb);
+      const flingBomb = bombFlingingSources.map((group) => {
+        const trajectories: [from: Piece, to: Piece][] = [];
+        group.forEach((from) => {
+          if (availableDestinations.length > 0) {
+            const to = take(availableDestinations);
+            trajectories.push([from, to]);
+          }
+        });
+        return trajectories;
+      });
+
+      const debugStart1 = performance.now();
+      console.log("Starting updateBoard().");
+
+      await this.animator.updateBoard({
+        remove: piecesToRemove,
+        counter,
+        flingBomb,
+        add: piecesToAdd,
+      });
+
+      const debugEnd1 = performance.now();
+      console.log(`await updateBoard() took ${debugEnd1 - debugStart1}ms.  Starting first pause.`);
+      await sleep(1000);
+
       groups = findActionable(this.#allPieces);
       actions = this.animator.assignGroupDecorations(groups);
       actions.highlightGroups();
+
+      console.log("Things are flashing.  Starting second pause.");
+
+      await sleep(1000);
+      console.log("Second pause complete.  Continuing at the top of the loop.");
+
     }
     // Tell the GUI that we are done?  In the previous code we did this:
     //       GUI.#newScoreDiv.innerHTML = "";
@@ -393,8 +442,6 @@ export class LogicalBoard {
       row.forEach((piece, columnIndex) => {
         piece.columnIndex = columnIndex;
         piece.rowIndex = rowIndex;
-        //this.animator.updatePositionNow(piece);
-        //this.animator.updateBomb(piece);
       });
     });
   }
@@ -460,7 +507,14 @@ export class LogicalBoard {
     return { preview, release };
   }
 
-  private async removePieces(piecesToRemove: Piece[]) {
+  /**
+   * Update the board.  Create new pieces to replace the old pieces.
+   * Update the pieces and the board with the new positions.
+   * @param piecesToRemove
+   * @returns A list of new pieces.
+   * Each piece includes an initialRow, so the GUI knows where to start the animation.
+   */
+  private removePieces(piecesToRemove: Piece[]) {
     /**
      * The array index is the column number.
      * The entries in each set are the rowIndex numbers.
@@ -469,29 +523,21 @@ export class LogicalBoard {
       LogicalBoard.SIZE,
       () => new Set<number>()
     );
-    {
-      const promises: Promise<void>[] = piecesToRemove.map(
-        ({ rowIndex, columnIndex }) => {
-          const set = allIndicesToRemove[columnIndex];
-          if (set.has(rowIndex)) {
-            throw new Error("wtf"); // Duplicate.
-          }
-          set.add(rowIndex);
-          return this.animator.destroyPiece(
-            this.#allPieces[rowIndex][columnIndex]
-          );
-        }
-      );
-      await Promise.all(promises);
-    }
+    piecesToRemove.forEach(({ rowIndex, columnIndex }) => {
+      const set = allIndicesToRemove[columnIndex];
+      if (set.has(rowIndex)) {
+        throw new Error("wtf"); // Duplicate.
+      }
+      set.add(rowIndex);
+    });
     /**
-     * The first index is the rowIndex number, the second is the column number.
+     * The first index is the row number, the second is the column number.
      */
     const final = initializedArray(
       LogicalBoard.SIZE,
       () => new Array<LogicalPiece>(LogicalBoard.SIZE)
     );
-    const needToSlide: Piece[] = [];
+    const newPieces: { initialRow: number; piece: LogicalPiece }[] = [];
     // Note this implementation is a bit simple.  Eventually we will
     // need to deal with 2⨉2 chuzzle pieces.  Some `Piece`'s will have
     // to be added from the bottom.
@@ -509,8 +555,8 @@ export class LogicalBoard {
       }
       for (let i = 0; newColumn.length < LogicalBoard.SIZE; i++) {
         const initialRow = -1 - i;
-        const newPiece = new LogicalPiece(initialRow, columnIndex);
-        this.animator.initializePiece(newPiece);
+        const newPiece = new LogicalPiece(NaN, columnIndex);
+        newPieces.push({ initialRow, piece: newPiece });
         newColumn.unshift(newPiece);
       }
 
@@ -518,12 +564,10 @@ export class LogicalBoard {
         final[finalRowIndex][columnIndex] = piece;
         piece.columnIndex = columnIndex;
         piece.rowIndex = finalRowIndex;
-        needToSlide.push(piece);
       });
     });
 
-    await Promise.all(needToSlide.map((piece) => this.animator.slideTo(piece)));
-
     this.setAllPieces(final);
+    return newPieces;
   }
 }

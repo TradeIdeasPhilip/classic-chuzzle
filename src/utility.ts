@@ -85,3 +85,12 @@ export function assertClass<T extends object, ARGS extends any[]>(
 export function polarToRectangular(r: number, θ: number) {
   return { x: Math.cos(θ) * r, y: Math.sin(θ) * r };
 }
+
+export function take<T>(array: T[]): T {
+  if (array.length < 1) {
+    throw new Error("wtf");
+  }
+  const index = (Math.random() * array.length) | 0;
+  const removed = array.splice(index, 1);
+  return removed[0];
+}

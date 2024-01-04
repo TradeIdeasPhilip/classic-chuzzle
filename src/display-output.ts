@@ -6,8 +6,16 @@ import {
   LogicalBoard,
   Animator,
   GroupGroupActions,
+  UpdateInstructions,
 } from "./logical-board";
-import { assertClass, positiveModulo } from "./utility";
+import { assertClass, positiveModulo, take } from "./utility";
+import {
+  Point,
+  makeCircle,
+  makeComposite,
+  mathToPath,
+  spiralPath,
+} from "./math-to-path";
 
 // TODO exponential changes in speed.  If the user makes one move and that sets off several automatic moves
 // in a row, each of the automatic moves in the series should take less time than the previous one.  So people
@@ -235,18 +243,13 @@ let durationFactor = 1;
 /**
  *
  * @param needToMove How far, in svg units, the tile will move.
- * @returns A reasonable set of animation options.
+ * @returns A reasonable duration, in milliseconds, for animating the move.
  */
-function animationOptions(needToMove: number): KeyframeAnimationOptions {
+function distanceToDuration(needToMove: number): number {
   /**
    * Two seconds if you go all the way across the board.
    */
-  const duration =
-    ((Math.abs(needToMove) * 2000) / LogicalBoard.SIZE) * durationFactor;
-  return {
-    duration,
-    //easing: "ease-in-out",
-  };
+  return ((Math.abs(needToMove) * 2000) / LogicalBoard.SIZE) * durationFactor;
 }
 
 /**
@@ -260,6 +263,8 @@ function clearAllDecorations() {
       "text.crystal-decoration,text.crystal-decoration-background"
     )
     .forEach((element) => (element.textContent = ""));
+  // TODO do I need to worry about animations?
+  // GuiPiece.cancelGroup() did this:  guiPiece.element.getAnimations().forEach((animation) => animation.cancel());
 }
 
 type HasPosition = { readonly rowIndex: number; columnIndex: number };
@@ -272,7 +277,7 @@ class GuiPiece {
   /**
    * New GuiPiece elements be cloned from this element.
    */
-  static #pieceTemplate = getById(
+  static readonly #pieceTemplate = getById(
     "piece",
     HTMLTemplateElement
   ).content.querySelector("g")!;
@@ -333,38 +338,30 @@ class GuiPiece {
    * Move the gui element from it's current position to the specified position.
    * The element will move along a straight line.
    * @param piece This specifies the destination where the animation will land.
-   * @param options Options passed on the Element.animate().
-   * The default will be something reasonable based on how far the piece has to move.
+   * @param options Options passed on to Element.animate().
    * @returns A promise that will resolve when the animation is complete.
    */
   async slideDirectlyTo(
     piece: HasPosition,
-    options?: KeyframeAnimationOptions
+    options: KeyframeAnimationOptions
   ): Promise<void> {
     const initialColumn = this.#columnIndex;
     const initialRow = this.#rowIndex;
-    this.updateFinalPosition(piece);
-    const finalColumn = this.#columnIndex;
-    const finalRow = this.#rowIndex;
-    if (!options) {
-      const needToMove = Math.hypot(
-        finalRow - initialRow,
-        finalColumn - initialColumn
+    const finalColumn = piece.columnIndex;
+    const finalRow = piece.rowIndex;
+    if ((initialColumn != finalColumn)||(initialRow!=finalRow)) {
+      const element = this.element;
+      const animation = element.animate(
+        [
+          { transform: `translate(${initialColumn}px, ${initialRow}px)` },
+          { transform: `translate(${finalColumn}px, ${finalRow}px)` },
+        ],
+        options
       );
-      options = animationOptions(needToMove);
+      //console.log(animation, options);
+      await animation.finished;  
+      this.updateFinalPosition(piece);
     }
-    const element = this.element;
-    // Does not work for svg: element.style.zIndex="3";
-    // So instead I'm moving it to the end of the list to get the same effect.
-    element.parentElement?.appendChild(element);
-    const animation = element.animate(
-      [
-        { transform: `translate(${initialColumn}px, ${initialRow}px)` },
-        { transform: `translate(${piece.columnIndex}px, ${piece.rowIndex}px)` },
-      ],
-      options
-    );
-    await animation.finished;
   }
 
   async rotateTo(
@@ -372,20 +369,7 @@ class GuiPiece {
     direction: "vertical" | "horizontal"
   ): Promise<void> {
     const horizontal = direction == "horizontal";
-    /*
-    console.log({
-      guiRow: this.#rowIndex,
-      guiColumn: this.#columnIndex,
-      logicalRow: piece.rowIndex,
-      logicalColumn: piece.columnIndex,
-      direction,
-      horizontal,
-      offset: horizontal
-        ? piece.columnIndex - this.#columnIndex
-        : piece.rowIndex - this.#rowIndex,
-    });
-    */
-    const options: KeyframeAnimationOptions = (() => {
+    const duration: number = (() => {
       const offset = horizontal
         ? piece.columnIndex - this.#columnIndex
         : piece.rowIndex - this.#rowIndex;
@@ -395,7 +379,7 @@ class GuiPiece {
       const shortestMove =
         positiveModulo(offset + LogicalBoard.SIZE / 2, LogicalBoard.SIZE) -
         LogicalBoard.SIZE / 2;
-      return animationOptions(Math.abs(shortestMove));
+      return distanceToDuration(Math.abs(shortestMove));
     })();
     const { position, offset } = horizontal
       ? makeScript(this.#columnIndex, piece.columnIndex)
@@ -406,7 +390,7 @@ class GuiPiece {
         : `translate(${piece.columnIndex}px, ${index}px)`
     );
     this.updateFinalPosition(piece);
-    await this.element.animate({ transform, offset }, options).finished;
+    await this.element.animate({ transform, offset }, duration).finished;
   }
 
   /**
@@ -416,7 +400,19 @@ class GuiPiece {
   /**
    * The next animation should start from here.
    */
+  get rowIndex() {
+    return this.#rowIndex;
+  }
+  /**
+   * The next animation should start from here.
+   */
   #columnIndex = NaN;
+  /**
+   * The next animation should start from here.
+   */
+  get columnIndex() {
+    return this.#columnIndex;
+  }
   constructor(piece: Piece) {
     const clone = assertClass(
       GuiPiece.#pieceTemplate.cloneNode(true),
@@ -430,12 +426,12 @@ class GuiPiece {
     this.bombElement = clone.querySelector(".bomb")!;
     clone.style.fill = piece.color;
     this.decorationBackgroundElement.style.stroke = piece.color;
-    this.bombElement.style.fill = pick(decorationColors.get(piece.color)!);
+    this.bombColor = pick(decorationColors.get(piece.color)!);
     this.bombVisible = false;
     this.updateFinalPosition(piece);
     boardElement.appendChild(clone);
   }
-  async remove(): Promise<void> {
+  async remove(afterMs = 0): Promise<void> {
     /**
      * Where `this` will land at the end of the animation.
      */
@@ -480,15 +476,24 @@ class GuiPiece {
         finalColumnIndex = LogicalBoard.SIZE - finalColumnIndex - 1;
       }
     }
+    this.element.parentElement!.appendChild(this.element);
     await this.slideDirectlyTo(
       { rowIndex: finalRowIndex, columnIndex: finalColumnIndex },
       {
-        duration: 1000,
+        duration: 1000 * durationFactor,
         easing: "ease-in",
+        delay: afterMs,
+        fill:"backwards",
       }
     );
     this.element.remove();
     (this as any).element = "💀";
+  }
+  get bombColor() {
+    return this.bombElement.style.fill;
+  }
+  set bombColor(newColor) {
+    this.bombElement.style.fill = newColor;
   }
 }
 
@@ -549,27 +554,240 @@ const makeScript = (initialPosition: number, finalPosition: number) => {
   return { position, offset };
 };
 
+/**
+ * Each cell comes with it's own bomb.  This will be a free
+ * floating bomb, which will be flung across the board.
+ */
+const bombTemplate = getById(
+  "piece",
+  HTMLTemplateElement
+).content.querySelector(".bomb")!;
+/**
+ * Where to place free floating bombs.
+ */
+const bombParent = getById("main", SVGSVGElement);
+
 class AnimatorImpl implements Animator {
-  cancelGroup(piece: Piece): void {
-    const guiPiece = this.#guiPieces.get(piece)!;
-    guiPiece.element.getAnimations().forEach((animation) => animation.cancel());
-    guiPiece.decorationElement.textContent = "";
-    guiPiece.decorationBackgroundElement.textContent = "";
+  async updateBoard(request: UpdateInstructions) {
+    this.#guiPieces.forEach((guiPiece, logicalPiece) => {
+      // Draw any new bombs.  This is aimed at groups of 5 where we
+      // create a new bomb in the group.  For simplicity this just
+      // checks every single piece.
+      guiPiece.bombVisible = logicalPiece.bomb;
+    });
+
+    {
+      // Update durationFactor.
+      /**
+       * This is the asymptote.  The duration will constantly approach this as counter grows.
+       */
+      const floor = 0.1;
+      const adjustable = 1 - floor;
+      /**
+       * What portion of the adjustable part can we keep from one round to the next.
+       *
+       * Range: 0 - 1.  Lower numbers lead to faster decay.
+       */
+      const keep = 0.85;
+      durationFactor = Math.pow(keep, request.counter - 1) * adjustable + floor;
+    }
+
+    /**
+     * How long to wait after the function is called before any tiles start
+     * moving.
+     *
+     * This is called after the preview has been cleaned up, so all of
+     * the tiles are where they should be.  And the group decorations only
+     * recently started flashing.  This is a period where all of the tiles
+     * stay in place so the user can see what's happening and which groups
+     * are about to be harvested.
+     */
+    const initialDelay = 3000 * durationFactor;
+
+    request.remove.forEach((piece) => {
+      this.#guiPieces.get(piece)!.remove(initialDelay);
+      this.#guiPieces.delete(piece);
+    });
+    setTimeout(() => clearAllDecorations(), initialDelay);
+
+    /**
+     * After waiting `initialDelay` then starting the removal of the old
+     * tiles wait `removeTime` before filling in the holes.
+     */
+    const removeTime = 1000 * durationFactor;
+
+    request.add.forEach(({ initialRow, piece }) => {
+      const guiPiece = new GuiPiece(piece);
+      this.#guiPieces.set(piece, guiPiece);
+      guiPiece.updateFinalPosition({
+        columnIndex: piece.columnIndex,
+        rowIndex: initialRow,
+      });
+    });
+
+    /**
+     * The length of the final phase where we slide the tiles to fill
+     * in the holes.  The length of this phase depends on the length
+     * of the longest path.
+     */
+    let maxSlideTime = 0;
+
+    /**
+     * Compute the details up front, but do the work after doing
+     * some other things.
+     *
+     * In particular, fling the bombs after computing `maxSlideTime` and
+     * before computing `slideActions`.
+     */
+    const slideActions: (() => void)[] = [];
+
+    this.#guiPieces.forEach((guiPiece, logicalPiece) => {
+      const initialColumn = guiPiece.columnIndex;
+      const initialRow = guiPiece.rowIndex;
+      const finalColumn = logicalPiece.columnIndex;
+      const finalRow = logicalPiece.rowIndex;
+      const needToMove = Math.hypot(
+        finalRow - initialRow,
+        finalColumn - initialColumn
+      );
+      const duration = distanceToDuration(needToMove);
+      const options: KeyframeAnimationOptions = {
+        duration,
+        delay: initialDelay + removeTime,
+        fill:"backwards",
+      };
+      slideActions.push(() => guiPiece.slideDirectlyTo(logicalPiece, options));
+      maxSlideTime = Math.max(maxSlideTime, duration);
+    });
+
+    // *   New from top / Piece / compute from from the list of pieces to add.  / to comes from Piece.   {readonly row:number, readonly column:number} columnindex?  already has name?
+    // ✔   Move / Piece / automatically deduce from & to
+    // ✔   Update bomb immediately.  / Piece
+    // *   Fling / from Piece / to Piece
+    // ✔     One list per group.  Each group will be spread out in time, but can overlap with other groups.
+    // ✔   Remove LogicalPiece
+    // ✔   List of all groups for score reasons?  No.  Leave that in GroupGroupInfo.addToScore
+    // ✔   Counter -- in both addToScore() and in this.
+    // ✔   Move Animator.cancelGroup() to here
+
+    slideActions.forEach((action) => action());
+
+    await sleep(initialDelay + removeTime + maxSlideTime);
+  }
+  async flingBomb(
+    source: Piece,
+    destination: Piece,
+    initialDelayMs: number,
+    durationMs: number
+  ) {
+    const sourceGui = this.#guiPieces.get(source)!;
+    const destinationGui = this.#guiPieces.get(destination)!;
+    /**
+     * Draw this color behind the floating bomb so it will be visible
+     * in front of different colored tiles.
+     */
+    const backgroundColor = destination.color;
+    /**
+     * The color of the bomb.
+     */
+    const foregroundColor = destinationGui.bombColor;
+    sourceGui.bombColor = foregroundColor;
+    sourceGui.bombVisible = true;
+    /**
+     * This g element contains two separate images.
+     * Animate the g element to make everything move together.
+     */
+    const bombTopElement = (() => {
+      const bombElement = assertClass(
+        bombTemplate.cloneNode(true),
+        SVGPathElement
+      );
+      const bombBackgroundElement = assertClass(
+        bombTemplate.cloneNode(true),
+        SVGPathElement
+      );
+      bombBackgroundElement.style.strokeWidth = "75";
+      bombElement.style.fill = foregroundColor;
+      bombBackgroundElement.style.stroke = backgroundColor;
+      const result = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "g"
+      );
+      result.appendChild(bombBackgroundElement);
+      result.appendChild(bombElement);
+      result.style.offsetRotate = "0deg";
+      return result;
+    })();
+    /**
+     * The floating bomb's path.
+     */
+    const path = ((): string => {
+      const from: Point = { x: source.columnIndex, y: source.rowIndex };
+      const to: Point = { x: destination.columnIndex, y: destination.rowIndex };
+      if (Math.random() < 0.3333333) {
+        return spiralPath(
+          from,
+          to,
+          0.5 + Math.random() * 2 + Math.random() * 2
+        );
+      } else {
+        /**
+         * Any random angle.
+         */
+        const initialAngle = Math.random() * 2 * Math.PI;
+        /**
+         * Clockwise or counterclockwise.  50%/50% odds.
+         */
+        const direction = ((Math.random() * 2) | 0) * 2 - 1;
+        /**
+         * Between ½ and 2½ complete rotations.
+         */
+        const finalAngle =
+          initialAngle + direction * (0.5 + Math.random() * 2) * 2 * Math.PI;
+        const radius = 0.5 + Math.random() * 2;
+        const f = makeComposite(
+          from,
+          to,
+          makeCircle(radius, initialAngle, finalAngle)
+        );
+        return mathToPath(f, { numberOfSegments: 20 });
+      }
+    })();
+    /**
+     * change the color of the source bomb.     DONE
+     * display the source bomb the normal way.  DONE
+     * wait n/7 of the total delay.             Someone else will do the %7 part
+     * hide the source bomb the normal way.
+     * make the floating bomb appear and animate it to the end.
+     * Wait for the end.
+     * Hide the floating bomb.
+     * display the destination bomb in the normal way.
+     * return from async
+     * need good test!!  Export a test function to the gui.
+     */
+    await sleep(initialDelayMs);
+    sourceGui.bombVisible = false;
+    bombParent.appendChild(bombTopElement);
+    bombTopElement.style.offsetPath = `path('${path}')`;
+    await bombTopElement.animate(
+      { offsetDistance: ["0%", "100%"] },
+      {
+        delay: initialDelayMs,
+        duration: durationMs,
+        iterations: 1,
+        easing: "ease-in-out",
+        fill: "both",
+      }
+    ).finished;
+    bombTopElement.remove();
+    destinationGui.bombVisible = true;
   }
   #guiPieces = new Map<Piece, GuiPiece>();
   initializePiece(piece: Piece): void {
     this.#guiPieces.set(piece, new GuiPiece(piece));
   }
-  destroyPiece(piece: Piece): Promise<void> {
-    const guiPiece = this.#guiPieces.get(piece)!;
-    this.#guiPieces.delete(piece);
-    return guiPiece.remove();
-  }
   jumpTo(piece: Piece): void {
     this.#guiPieces.get(piece)!.updateFinalPosition(piece);
-  }
-  slideTo(piece: Piece): Promise<void> {
-    return this.#guiPieces.get(piece)!.slideDirectlyTo(piece);
   }
   drawPreview(
     direction: "vertical" | "horizontal",
@@ -596,10 +814,6 @@ class AnimatorImpl implements Animator {
     );
     await Promise.all(promises);
   }
-  updateBomb(piece: Piece): void {
-    const guiPiece = this.#guiPieces.get(piece)!;
-    guiPiece.bombVisible = piece.bomb;
-  }
 
   assignGroupDecorations(
     groups: ReadonlyArray<ReadonlyArray<Piece>>
@@ -608,9 +822,7 @@ class AnimatorImpl implements Animator {
       // This is a minor optimization.  Mostly I didn't want to
       // make a copy of decorations unless I needed to.
       return {
-        addToScore() {
-          return Promise.resolve();
-        },
+        addToScore() {},
         highlightGroups() {
           clearAllDecorations();
         },
@@ -623,11 +835,7 @@ class AnimatorImpl implements Animator {
       const savedGroupInfo = groups.map((pieces) => {
         const backgroundColor = pieces[0].color;
         const decorationColor = pick(decorationColors.get(backgroundColor)!);
-        const decorationIndex = Math.floor(
-          Math.random() * decorationsAvailable.length
-        );
-        const decorationText = decorationsAvailable[decorationIndex];
-        decorationsAvailable.splice(decorationIndex, 1);
+        const decorationText = take(decorationsAvailable);
         const guiPieces = pieces.map((piece) => {
           const guiPiece = this.#guiPieces.get(piece);
           if (guiPiece == undefined) {
@@ -637,26 +845,8 @@ class AnimatorImpl implements Animator {
         });
         return { guiPieces, decorationColor, decorationText, backgroundColor };
       });
-      /**
-       *
-       * @param counter 1 for the first thing you want to show off in a group.
-       * Larger numbers for as the process keeps repeating.
-       */
-      const updateAnimationSpeed = (counter: number) => {
-        /**
-         * This is the asymptote.  The duration will constantly approach this as counter grows.
-         */
-        const floor = 0.1;
-        const adjustable = 1 - floor;
-        /**
-         * How much to decay each time the counter goes up by 1.
-         */
-        const decay = 0.8;
-        durationFactor = Math.pow(decay, counter - 1) * adjustable + floor;
-      };
       return {
-        async addToScore(counter: number) {
-          updateAnimationSpeed(counter);
+        addToScore(counter: number) {
           // Flash the items about to be collected.
           savedGroupInfo.forEach(({ guiPieces }) => {
             const maxOpacity = 1;
@@ -705,7 +895,6 @@ class AnimatorImpl implements Animator {
               newScoreDiv.appendChild(span);
             }
           );
-          await sleep(2000 * durationFactor);
         },
         highlightGroups() {
           clearAllDecorations();
