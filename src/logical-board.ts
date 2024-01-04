@@ -116,14 +116,14 @@ export const colors: readonly Color[] = [
 /**
  * What is in each cell.
  */
-export type Piece = {
+export type LogicalPiece = {
   readonly rowIndex: number;
   readonly columnIndex: number;
   readonly color: Color;
   readonly bomb: boolean;
 };
 
-class LogicalPiece implements Piece {
+class LogicalPieceImpl implements LogicalPiece {
   /**
    * A placeholder.  Eventually I need to deal with 2⨉2 pieces.
    */
@@ -132,7 +132,7 @@ class LogicalPiece implements Piece {
   constructor(
     public rowIndex: number,
     public columnIndex: number,
-    readonly color: Color = LogicalPiece.randomColor()
+    readonly color: Color = LogicalPieceImpl.randomColor()
   ) {}
   static randomColor() {
     return pick(colors);
@@ -155,7 +155,7 @@ export type PointerActions = {
   release(offset: number): Promise<void>;
 };
 
-type Groups = readonly (readonly LogicalPiece[])[];
+type Groups = readonly (readonly LogicalPieceImpl[])[];
 
 /**
  * This controls all of the groups on the screen at once.
@@ -186,14 +186,14 @@ export type Animator = {
    * It is safe (and expected) for the GUI to use this object as a
    * key in a `Map`.
    */
-  initializePiece(piece: Piece): void;
+  initializePiece(piece: LogicalPiece): void;
 
   /**
    * Move the GuiPiece to the position specified in the given LogicalPiece.
    * @param piece Move the GUI element to (piece.rowIndex, piece.columnIndex).
    * `piece` was the input to a previous call to `initializePiece()`.
    */
-  jumpTo(piece: Piece): void;
+  jumpTo(piece: LogicalPiece): void;
 
   /**
    * When the user is dragging the mouse we send constant updates to the GUI.
@@ -205,7 +205,7 @@ export type Animator = {
    */
   drawPreview(
     direction: "vertical" | "horizontal",
-    pieces: readonly Piece[],
+    pieces: readonly LogicalPiece[],
     offset: number
   ): void;
 
@@ -231,7 +231,7 @@ export type Animator = {
    */
   rotateTo(
     direction: "vertical" | "horizontal",
-    pieces: readonly Piece[]
+    pieces: readonly LogicalPiece[]
   ): Promise<void>;
   assignGroupDecorations(groups: Groups): GroupGroupActions;
 
@@ -244,13 +244,13 @@ export type UpdateInstructions = {
    */
   add: {
     initialRow: number;
-    piece: Piece;
+    piece: LogicalPiece;
   }[];
   /**
    * Each of these pieces will be flung off the board,
    * never to be seen or heard from again.
    */
-  remove: Piece[];
+  remove: LogicalPiece[];
   /**
    * This is aimed a a group of 6 cells.  Each of the 6 gets
    * assigned a bomb.  Then the bomb moves to another cell
@@ -261,7 +261,7 @@ export type UpdateInstructions = {
    * The animations for each piece in a group are offset slightly in time.
    * If there are multiple groups, they can overlap in time.
    */
-  flingBomb: [from: Piece, to: Piece][][];
+  flingBomb: [from: LogicalPiece, to: LogicalPiece][][];
   /**
    * 1 if the user just made a move.  I.e. 1st move in the series.
    * 2 if this is the first automatic move after the user's move.  I.e. 2nd move in the series.
@@ -277,7 +277,7 @@ export type UpdateInstructions = {
 /**
  * The first index is the rowIndex number, the second is the column number.
  */
-type AllPieces = ReadonlyArray<ReadonlyArray<LogicalPiece>>;
+type AllPieces = ReadonlyArray<ReadonlyArray<LogicalPieceImpl>>;
 
 /**
  * An entire board, with no GUI.
@@ -306,7 +306,7 @@ export class LogicalBoard {
     const result = initializedArray(LogicalBoard.SIZE, (rowIndex) =>
       initializedArray(
         LogicalBoard.SIZE,
-        (columnIndex) => new LogicalPiece(rowIndex, columnIndex)
+        (columnIndex) => new LogicalPieceImpl(rowIndex, columnIndex)
       )
     );
     /**
@@ -331,7 +331,7 @@ export class LogicalBoard {
             }
           }
         });
-        result[rowIndex][columnIndex] = new LogicalPiece(
+        result[rowIndex][columnIndex] = new LogicalPieceImpl(
           rowIndex,
           columnIndex,
           pick(colors.filter((color) => !nearby.has(color)))
@@ -355,8 +355,8 @@ export class LogicalBoard {
    */
   private async updateLoop(groups: Groups, actions: GroupGroupActions) {
     for (let counter = 1; groups.length > 0; counter++) {
-      const immuneFromDestruction = new Set<Piece>();
-      const bombFlingingSources: (readonly LogicalPiece[])[] = [];
+      const immuneFromDestruction = new Set<LogicalPiece>();
+      const bombFlingingSources: (readonly LogicalPieceImpl[])[] = [];
       /** TODO
        * Display groups and make them flash and add them to the scoreboard.
        * Mark some things as bombs and other things as need to destroy.
@@ -398,7 +398,7 @@ export class LogicalBoard {
         .flat()
         .filter((piece) => !piece.bomb);
       const flingBomb = bombFlingingSources.map((group) => {
-        const trajectories: [from: Piece, to: Piece][] = [];
+        const trajectories: [from: LogicalPiece, to: LogicalPiece][] = [];
         group.forEach((from) => {
           if (availableDestinations.length > 0) {
             const to = take(availableDestinations);
@@ -419,7 +419,11 @@ export class LogicalBoard {
       });
 
       const debugEnd1 = performance.now();
-      console.log(`await updateBoard() took ${debugEnd1 - debugStart1}ms.  Starting first pause.`);
+      console.log(
+        `await updateBoard() took ${
+          debugEnd1 - debugStart1
+        }ms.  Starting first pause.`
+      );
       await sleep(1000);
 
       groups = findActionable(this.#allPieces);
@@ -430,7 +434,6 @@ export class LogicalBoard {
 
       await sleep(1000);
       console.log("Second pause complete.  Continuing at the top of the loop.");
-
     }
     // Tell the GUI that we are done?  In the previous code we did this:
     //       GUI.#newScoreDiv.innerHTML = "";
@@ -514,7 +517,7 @@ export class LogicalBoard {
    * @returns A list of new pieces.
    * Each piece includes an initialRow, so the GUI knows where to start the animation.
    */
-  private removePieces(piecesToRemove: Piece[]) {
+  private removePieces(piecesToRemove: LogicalPiece[]) {
     /**
      * The array index is the column number.
      * The entries in each set are the rowIndex numbers.
@@ -535,14 +538,14 @@ export class LogicalBoard {
      */
     const final = initializedArray(
       LogicalBoard.SIZE,
-      () => new Array<LogicalPiece>(LogicalBoard.SIZE)
+      () => new Array<LogicalPieceImpl>(LogicalBoard.SIZE)
     );
-    const newPieces: { initialRow: number; piece: LogicalPiece }[] = [];
+    const newPieces: { initialRow: number; piece: LogicalPieceImpl }[] = [];
     // Note this implementation is a bit simple.  Eventually we will
     // need to deal with 2⨉2 chuzzle pieces.  Some `Piece`'s will have
     // to be added from the bottom.
     allIndicesToRemove.forEach((indicesToRemove, columnIndex) => {
-      const newColumn: LogicalPiece[] = [];
+      const newColumn: LogicalPieceImpl[] = [];
       for (
         let originalRowIndex = 0;
         originalRowIndex < LogicalBoard.SIZE;
@@ -555,7 +558,7 @@ export class LogicalBoard {
       }
       for (let i = 0; newColumn.length < LogicalBoard.SIZE; i++) {
         const initialRow = -1 - i;
-        const newPiece = new LogicalPiece(NaN, columnIndex);
+        const newPiece = new LogicalPieceImpl(NaN, columnIndex);
         newPieces.push({ initialRow, piece: newPiece });
         newColumn.unshift(newPiece);
       }

@@ -14,20 +14,10 @@ import { assertClass } from "./utility";
 import { pick, sleep } from "phil-lib/misc";
 
 {
-  // TITLE BAR
-  let showNext = "☆";
-  setInterval(() => {
-    document.title = `${showNext} Classic Chuzzle`;
-    showNext = showNext == "☆" ? "★" : "☆";
-  }, 1000);
-}
-
-{
   // BACKGROUND ANIMATION
-  const [black, white, color] = getById(
-    "background",
-    SVGGElement
-  ).querySelectorAll("circle");
+  const [black, white] = getById("background", SVGGElement).querySelectorAll(
+    "circle"
+  );
   black.animate(
     [{ transform: "rotate(720deg)" }, { transform: "rotate(0deg)" }],
     { duration: 67973, easing: "ease", iterations: Infinity }
@@ -40,19 +30,29 @@ import { pick, sleep } from "phil-lib/misc";
       iterations: Infinity,
     }
   );
-  color.animate(
-    colors.flatMap((color, index) => [
-      { fill: color, opacity: 0, offset: index / colors.length },
-      { fill: color, opacity: 0.15, offset: (index + 0.25) / colors.length },
-      { fill: color, opacity: 0.15, offset: (index + 0.75) / colors.length },
-      { fill: color, opacity: 0, offset: (index + 1) / colors.length },
-    ]),
-    { duration: 4000 * colors.length, iterations: Infinity }
-  );
 }
 
+getById("thinPatternLine", SVGLineElement).animate(
+  colors.flatMap((color, index) => [
+    { stroke: "black", offset: index / colors.length },
+    { stroke: color, offset: (index + 0.25) / colors.length },
+    { stroke: color, offset: (index + 0.75) / colors.length },
+    { stroke: "black", offset: (index + 1) / colors.length },
+  ]),
+  { duration: 4000 * colors.length, iterations: Infinity }
+);
+getById("thickPatternLine", SVGLineElement).animate(
+  colors.flatMap((color, index) => [
+    { stroke: "white", offset: index / colors.length },
+    { stroke: color, offset: (index + 0.25) / colors.length },
+    { stroke: color, offset: (index + 0.75) / colors.length },
+    { stroke: "white", offset: (index + 1) / colors.length },
+  ]),
+  { duration: 4321 * colors.length, iterations: Infinity }
+);
+
 getById("main", SVGSVGElement).animate(
-  { backgroundColor: ["#404040", "#C0C0C0", "#404040"] },
+  { backgroundColor: ["#202020", "#e0e0e0", "#202020"] },
   { duration: 97531, direction: "alternate", iterations: Infinity }
 );
 
@@ -154,101 +154,6 @@ async function testMathToPath() {
     await sleep(2000);
   }
 
-  if (false) {
-    const path = spiralPath(
-      { x: 1, y: 1 },
-      { x: 3, y: 4 },
-      0.5 + Math.random() * 2 + Math.random() * 2
-    );
-    const pathElement = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "path"
-    );
-    pathElement.style.fill = "none";
-    pathElement.style.stroke = "white";
-    pathElement.style.strokeWidth = "0.02px";
-    pathElement.style.strokeLinecap = "round";
-    pathElement.style.transform = "translate(0.5px,0.5px)";
-    pathElement.setAttribute("d", path);
-    svg.appendChild(pathElement);
-    const bombElement = newBomb();
-    bombElement.style.fill = "black";
-    const bombHolder = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "g"
-    );
-    bombHolder.appendChild(bombElement);
-    svg.appendChild(bombHolder);
-    //bombHolder.style.transform="translate(1px,2px)";
-    bombHolder.style.offsetPath = `path('${path}')`;
-    bombHolder.style.offsetRotate = "0deg";
-    bombHolder.animate(
-      { offsetDistance: ["0%", "100%"] },
-      { duration: 3000, iterations: Infinity, easing: "ease-in-out" }
-    );
-
-    console.log({ path, pathElement, bombElement, bombHolder });
-  }
-  if (false) {
-    /**
-     * Any random angle.
-     */
-    const initialAngle = Math.random() * 2 * Math.PI;
-    /**
-     * Clockwise or counterclockwise.  50%/50% odds.
-     */
-    const direction = ((Math.random() * 2) | 0) * 2 - 1;
-    /**
-     * Between ½ and 2½ complete rotations.
-     */
-    const finalAngle =
-      initialAngle + direction * (0.5 + Math.random() * 2) * 2 * Math.PI;
-    const radius = 0.5 + Math.random() * 2;
-    const f = makeComposite(
-      { x: 1, y: 1 },
-      { x: 3, y: 4 },
-      makeCircle(radius, initialAngle, finalAngle)
-    );
-    const path = mathToPath(f, { numberOfSegments: 20 });
-    const pathElement = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "path"
-    );
-    pathElement.style.fill = "none";
-    pathElement.style.stroke = "blue";
-    pathElement.style.strokeWidth = "0.02px";
-    pathElement.style.strokeLinecap = "round";
-    pathElement.style.transform = "translate(0.5px,0.5px)";
-    pathElement.setAttribute("d", path);
-    svg.appendChild(pathElement);
-
-    const bombElement = newBomb();
-    bombElement.style.fill = "cyan";
-    const bombHolder = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "g"
-    );
-    bombHolder.appendChild(bombElement);
-    svg.appendChild(bombHolder);
-    //bombHolder.style.transform="translate(1px,2px)";
-    bombHolder.style.offsetPath = `path('${path}')`;
-    bombHolder.style.offsetRotate = "0deg";
-    bombHolder.animate(
-      [
-        { offset: 0, offsetDistance: "0%", easing: "ease-in-out" },
-        { offset: 0.95, offsetDistance: "100%", easing: "ease-in-out" },
-        { offset: 1, offsetDistance: "100%", easing: "ease-in-out" },
-      ],
-      {
-        duration: 3000,
-        iterations: Infinity,
-        easing: "ease-in-out",
-        iterationStart: 0.5,
-      }
-    );
-
-    console.log(path, pathElement);
-  }
 }
 
-//testMathToPath();
+testMathToPath; //();

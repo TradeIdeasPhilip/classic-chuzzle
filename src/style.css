@@ -18,7 +18,7 @@ div.cell-phone-warning {
 }
 
 svg text {
-  font-size: 0.5px;
+  font-size: 0.4px;
   text-anchor: middle;
   dominant-baseline: middle;
   pointer-events: none;

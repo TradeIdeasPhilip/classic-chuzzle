@@ -1,7 +1,7 @@
 import { getById } from "phil-lib/client-misc";
 import { pick, sleep } from "phil-lib/misc";
 import {
-  Piece,
+  LogicalPiece,
   Color,
   LogicalBoard,
   Animator,
@@ -234,6 +234,13 @@ const decorations: ReadonlyArray<string> = [
 ];
 
 /**
+ * Title Bar
+ */
+setInterval(() => {
+  document.title = `${pick(decorations)} Classic Chuzzle`;
+}, 2000);
+
+/**
  * 1 means to display the animations at normal speed.
  * 0.5 means to display them at twice the normal speed.
  * I.e. when specifying the duration for an animation, multiply it by this number first.
@@ -349,7 +356,7 @@ class GuiPiece {
     const initialRow = this.#rowIndex;
     const finalColumn = piece.columnIndex;
     const finalRow = piece.rowIndex;
-    if ((initialColumn != finalColumn)||(initialRow!=finalRow)) {
+    if (initialColumn != finalColumn || initialRow != finalRow) {
       const element = this.element;
       const animation = element.animate(
         [
@@ -359,13 +366,13 @@ class GuiPiece {
         options
       );
       //console.log(animation, options);
-      await animation.finished;  
+      await animation.finished;
       this.updateFinalPosition(piece);
     }
   }
 
   async rotateTo(
-    piece: Piece,
+    piece: LogicalPiece,
     direction: "vertical" | "horizontal"
   ): Promise<void> {
     const horizontal = direction == "horizontal";
@@ -413,7 +420,7 @@ class GuiPiece {
   get columnIndex() {
     return this.#columnIndex;
   }
-  constructor(piece: Piece) {
+  constructor(piece: LogicalPiece) {
     const clone = assertClass(
       GuiPiece.#pieceTemplate.cloneNode(true),
       SVGGElement
@@ -483,7 +490,7 @@ class GuiPiece {
         duration: 1000 * durationFactor,
         easing: "ease-in",
         delay: afterMs,
-        fill:"backwards",
+        fill: "backwards",
       }
     );
     this.element.remove();
@@ -654,7 +661,7 @@ class AnimatorImpl implements Animator {
       const options: KeyframeAnimationOptions = {
         duration,
         delay: initialDelay + removeTime,
-        fill:"backwards",
+        fill: "backwards",
       };
       slideActions.push(() => guiPiece.slideDirectlyTo(logicalPiece, options));
       maxSlideTime = Math.max(maxSlideTime, duration);
@@ -675,8 +682,8 @@ class AnimatorImpl implements Animator {
     await sleep(initialDelay + removeTime + maxSlideTime);
   }
   async flingBomb(
-    source: Piece,
-    destination: Piece,
+    source: LogicalPiece,
+    destination: LogicalPiece,
     initialDelayMs: number,
     durationMs: number
   ) {
@@ -782,16 +789,16 @@ class AnimatorImpl implements Animator {
     bombTopElement.remove();
     destinationGui.bombVisible = true;
   }
-  #guiPieces = new Map<Piece, GuiPiece>();
-  initializePiece(piece: Piece): void {
+  #guiPieces = new Map<LogicalPiece, GuiPiece>();
+  initializePiece(piece: LogicalPiece): void {
     this.#guiPieces.set(piece, new GuiPiece(piece));
   }
-  jumpTo(piece: Piece): void {
+  jumpTo(piece: LogicalPiece): void {
     this.#guiPieces.get(piece)!.updateFinalPosition(piece);
   }
   drawPreview(
     direction: "vertical" | "horizontal",
-    pieces: readonly Piece[],
+    pieces: readonly LogicalPiece[],
     offset: number
   ): void {
     pieces.forEach((piece) => {
@@ -807,7 +814,7 @@ class AnimatorImpl implements Animator {
   }
   async rotateTo(
     direction: "vertical" | "horizontal",
-    pieces: readonly Piece[]
+    pieces: readonly LogicalPiece[]
   ): Promise<void> {
     const promises = pieces.map((piece) =>
       this.#guiPieces.get(piece)!.rotateTo(piece, direction)
@@ -816,7 +823,7 @@ class AnimatorImpl implements Animator {
   }
 
   assignGroupDecorations(
-    groups: ReadonlyArray<ReadonlyArray<Piece>>
+    groups: ReadonlyArray<ReadonlyArray<LogicalPiece>>
   ): GroupGroupActions {
     if (groups.length == 0) {
       // This is a minor optimization.  Mostly I didn't want to
