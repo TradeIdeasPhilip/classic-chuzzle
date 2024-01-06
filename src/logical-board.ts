@@ -17,7 +17,7 @@
  * can update separately; you don't need any special coordination between the sides.
  */
 
-import { initializedArray, pick, sleep } from "phil-lib/misc";
+import { initializedArray, pick } from "phil-lib/misc";
 import { findActionable } from "./groups";
 import { positiveModulo, rotateArray, take } from "./utility";
 
@@ -422,18 +422,12 @@ export class LogicalBoard {
       console.log(
         `await updateBoard() took ${
           debugEnd1 - debugStart1
-        }ms.  Starting first pause.`
+        }ms.`
       );
-      await sleep(1000);
 
       groups = findActionable(this.#allPieces);
       actions = this.animator.assignGroupDecorations(groups);
       actions.highlightGroups();
-
-      console.log("Things are flashing.  Starting second pause.");
-
-      await sleep(1000);
-      console.log("Second pause complete.  Continuing at the top of the loop.");
     }
     // Tell the GUI that we are done?  In the previous code we did this:
     //       GUI.#newScoreDiv.innerHTML = "";

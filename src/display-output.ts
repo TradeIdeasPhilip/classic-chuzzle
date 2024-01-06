@@ -136,6 +136,13 @@ export const decorationColors: ReadonlyMap<
  * And in part because its fun to go looking for new interesting unicode characters.
  */
 const decorations: ReadonlyArray<string> = [
+  "༟",
+  "༴",
+  "℣",
+  "⌰",
+  "⍷",
+  "⎙",
+  "⏿",
   "ʻ",
   "☆",
   "𝛿",
@@ -231,6 +238,7 @@ const decorations: ReadonlyArray<string> = [
   "🝤",
   // https://unicodeemoticons.com/cool_text_icons_and_pictures.htm
   // https://jrgraphix.net/r/Unicode/2600-26FF
+  // https://www.compart.com/en/unicode/category/So
 ];
 
 /**
@@ -238,7 +246,7 @@ const decorations: ReadonlyArray<string> = [
  */
 setInterval(() => {
   document.title = `${pick(decorations)} Classic Chuzzle`;
-}, 2000);
+}, 1500);
 
 /**
  * 1 means to display the animations at normal speed.
@@ -595,7 +603,7 @@ class AnimatorImpl implements Animator {
        *
        * Range: 0 - 1.  Lower numbers lead to faster decay.
        */
-      const keep = 0.85;
+      const keep = 0.75;
       durationFactor = Math.pow(keep, request.counter - 1) * adjustable + floor;
     }
 
@@ -609,12 +617,15 @@ class AnimatorImpl implements Animator {
      * stay in place so the user can see what's happening and which groups
      * are about to be harvested.
      */
-    const initialDelay = 3000 * durationFactor;
+    const initialDelay = 2000 * durationFactor;
 
-    request.remove.forEach((piece) => {
-      this.#guiPieces.get(piece)!.remove(initialDelay);
-      this.#guiPieces.delete(piece);
-    });
+    const allRemovePromises = Promise.all(
+      request.remove.map((piece) => {
+        const result = this.#guiPieces.get(piece)!.remove(initialDelay);
+        this.#guiPieces.delete(piece);
+        return result;
+      })
+    );
     setTimeout(() => clearAllDecorations(), initialDelay);
 
     /**
@@ -644,9 +655,9 @@ class AnimatorImpl implements Animator {
      * some other things.
      *
      * In particular, fling the bombs after computing `maxSlideTime` and
-     * before computing `slideActions`.
+     * before executing `slideActions`.
      */
-    const slideActions: (() => void)[] = [];
+    const slideActions: (() => Promise<void>)[] = [];
 
     this.#guiPieces.forEach((guiPiece, logicalPiece) => {
       const initialColumn = guiPiece.columnIndex;
@@ -677,9 +688,11 @@ class AnimatorImpl implements Animator {
     // ✔   Counter -- in both addToScore() and in this.
     // ✔   Move Animator.cancelGroup() to here
 
-    slideActions.forEach((action) => action());
+    const allSlidePromises = Promise.all(
+      slideActions.map((action) => action())
+    );
 
-    await sleep(initialDelay + removeTime + maxSlideTime);
+    await Promise.all([allRemovePromises, allSlidePromises]); //sleep(initialDelay + removeTime + maxSlideTime);
   }
   async flingBomb(
     source: LogicalPiece,
