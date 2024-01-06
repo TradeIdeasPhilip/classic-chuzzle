@@ -59,3 +59,17 @@ text.crystal-decoration-background {
   stroke-width: 0.125;
   stroke-miterlimit: 0.125;
 }
+
+#decorationTester {
+  display: flex;
+  gap: 0.25em;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+#decorationTester > div {
+  border-width:0.25em;
+  border-color: rgba(192 192 192 / 25%);
+  border-style:solid;
+}
