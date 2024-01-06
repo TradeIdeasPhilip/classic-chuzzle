@@ -94,3 +94,5 @@ export function take<T>(array: T[]): T {
   const removed = array.splice(index, 1);
   return removed[0];
 }
+
+// And whenever I update phil-lib, sleep should return Promise<void>, not Promise<unknown>.

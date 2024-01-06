@@ -142,7 +142,6 @@ const decorations: ReadonlyArray<string> = [
   "⌰",
   "⍷",
   "⎙",
-  "⏿",
   "ʻ",
   "☆",
   "𝛿",
@@ -937,7 +936,7 @@ class AnimatorImpl implements Animator {
 export const animator: Animator = new AnimatorImpl();
 
 const decorationTesterDiv = getById("decorationTester", HTMLDivElement);
-decorations.forEach(char => {
+decorations.forEach((char) => {
   const div = document.createElement("div");
   div.innerText = `${char} u+${char.codePointAt(0)!.toString(16)}`;
   decorationTesterDiv.appendChild(div);

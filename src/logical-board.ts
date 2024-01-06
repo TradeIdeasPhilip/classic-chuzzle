@@ -419,11 +419,7 @@ export class LogicalBoard {
       });
 
       const debugEnd1 = performance.now();
-      console.log(
-        `await updateBoard() took ${
-          debugEnd1 - debugStart1
-        }ms.`
-      );
+      console.log(`await updateBoard() took ${debugEnd1 - debugStart1}ms.`);
 
       groups = findActionable(this.#allPieces);
       actions = this.animator.assignGroupDecorations(groups);

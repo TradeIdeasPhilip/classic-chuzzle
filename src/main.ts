@@ -153,7 +153,6 @@ async function testMathToPath() {
     pathElement.style.display = "";
     await sleep(2000);
   }
-
 }
 
 testMathToPath; //();

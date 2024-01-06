@@ -69,7 +69,8 @@ text.crystal-decoration-background {
 }
 
 #decorationTester > div {
-  border-width:0.25em;
+  border-width: 0.25em;
   border-color: rgba(192 192 192 / 25%);
-  border-style:solid;
+  border-style: solid;
+  white-space: nowrap;
 }
