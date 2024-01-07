@@ -180,20 +180,13 @@ export type GroupGroupActions = {
 
 export type Animator = {
   /**
-   * Tell the GUI that we are going to use a new piece.  The GUI will
-   * create a square and display it based on the information in the piece.
+   * Tell the GUI that we are going to use new pieces.  The GUI will
+   * dispose of any previous pieces and add all of these.
    * @param piece This is the LogicalPiece that we want to display.
-   * It is safe (and expected) for the GUI to use this object as a
-   * key in a `Map`.
+   * It is safe (and expected) for the GUI to use these pieces as
+   * keys in a `Map`.
    */
-  initializePiece(piece: LogicalPiece): void;
-
-  /**
-   * Move the GuiPiece to the position specified in the given LogicalPiece.
-   * @param piece Move the GUI element to (piece.rowIndex, piece.columnIndex).
-   * `piece` was the input to a previous call to `initializePiece()`.
-   */
-  jumpTo(piece: LogicalPiece): void;
+  initializeBoard(pieces: LogicalPiece[]): void;
 
   /**
    * When the user is dragging the mouse we send constant updates to the GUI.
@@ -221,8 +214,8 @@ export type Animator = {
    * determines the final locations of each Piece, this function will move the pieces
    * from the last preview location to their final location.
    *
-   * Note:  This function and drawPreview() both take a list of pieces while jumpTo()
-   * and slideTo() work on individual pieces.  Originally I thought that grouping
+   * Note:  This function and drawPreview() both take a list of pieces while
+   * slideTo() works on individual pieces.  Originally I thought that grouping
    * these operations together was required.  Then I thought it wasn't required, but
    * it would help optimize things.  Now I don't see any value to accepting a whole
    * array in some functions.  It's not a huge problem, but it is inconsistent.
@@ -235,6 +228,15 @@ export type Animator = {
   ): Promise<void>;
   assignGroupDecorations(groups: Groups): GroupGroupActions;
 
+  /**
+   * Update the board after making a move.
+   *
+   * Several actions are all sent to the GUI at once because some of the operations overlap.
+   *
+   * This covers one set of groups all disappearing and being replaced by new tiles.  If that
+   * creates new groups, this function will be called again.
+   * @param request Specific details of what to animate.
+   */
   updateBoard(request: UpdateInstructions): Promise<void>;
 };
 
@@ -249,6 +251,9 @@ export type UpdateInstructions = {
      * Then move to the location in the `piece`.
      */
     initialRow: number;
+    /**
+     * The new piece.
+     */
     piece: LogicalPiece;
   }[];
   /**
@@ -302,9 +307,7 @@ export class LogicalBoard {
 
   constructor(private readonly animator: Animator) {
     this.#allPieces = this.createRandom();
-    this.#allPieces.forEach((row) =>
-      row.forEach((piece) => this.animator.initializePiece(piece))
-    );
+    this.animator.initializeBoard(this.#allPieces.flat());
   }
   private createRandom() {
     // Start with completely random pieces.
@@ -410,18 +413,12 @@ export class LogicalBoard {
         return trajectories;
       });
 
-      const debugStart1 = performance.now();
-      console.log("Starting updateBoard().");
-
       await this.animator.updateBoard({
         remove: piecesToRemove,
         counter,
         flingBomb,
         add: piecesToAdd,
       });
-
-      const debugEnd1 = performance.now();
-      console.log(`await updateBoard() took ${debugEnd1 - debugStart1}ms.`);
 
       flingBomb.flat().forEach(({ destination }) => (destination.bomb = true));
 

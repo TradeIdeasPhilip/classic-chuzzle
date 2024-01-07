@@ -4,9 +4,7 @@
 
 Missing a lot, but playable.
 
-Sometimes I display bombs.
-But they don't explode yet.
-Watch bombs fly around like crazy: https://youtu.be/IjQcdktLzLY.
+Here's an old video: https://youtu.be/IjQcdktLzLY.
 
 ## How to Play
 
@@ -14,6 +12,10 @@ Try it yourself: https://tradeideasphilip.github.io/classic-chuzzle/.
 
 Drag a cell until you have a group of 3 or more cells of the same color touching.
 Those will disappear and be replaced with new cells.
+
+If you connect 5 cells, you'll get a free bomb.
+If you connect 6 or more cells, _each_ of those cells will give you a bomb.
+(Someday soon I hope to _use_ the bombs, but for now at least you can _see_ the bombs.)
 
 ## Why?
 

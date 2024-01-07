@@ -377,7 +377,6 @@ class GuiPiece {
         ],
         options
       );
-      //console.log(animation, options);
       await animation.finished;
       this.updateFinalPosition(piece);
     }
@@ -595,6 +594,11 @@ const bombTemplate = getById(
 const bombParent = getById("main", SVGSVGElement);
 
 class AnimatorImpl implements Animator {
+  initializeBoard(pieces: LogicalPiece[]): void {
+    boardElement.innerHTML = "";
+    this.#guiPieces.clear();
+    pieces.forEach((piece) => this.#guiPieces.set(piece, new GuiPiece(piece)));
+  }
   async updateBoard(request: UpdateInstructions) {
     this.#guiPieces.forEach((guiPiece, logicalPiece) => {
       // Draw any new bombs.  This is aimed at groups of 5 where we
@@ -729,7 +733,6 @@ class AnimatorImpl implements Animator {
           const start =
             (Math.min(initialDelay, totalTime / 2) / (group.length + 1)) *
             (index + 1);
-          console.log({ start, initialDelay, totalTime, group, index });
           const duration = totalTime - start;
           return this.flingBomb(endPoints, start, duration);
         });
@@ -839,18 +842,6 @@ class AnimatorImpl implements Animator {
         return mathToPath(f, { numberOfSegments: 20 });
       }
     })();
-    /**
-     * change the color of the source bomb.     DONE
-     * display the source bomb the normal way.  DONE
-     * wait n/7 of the total delay.             Someone else will do the %7 part
-     * hide the source bomb the normal way.
-     * make the floating bomb appear and animate it to the end.
-     * Wait for the end.
-     * Hide the floating bomb.
-     * display the destination bomb in the normal way.
-     * return from async
-     * need good test!!  Export a test function to the gui.
-     */
     await sleep(initialDelayMs);
     guiSource.bombVisible = false;
     bombParent.appendChild(bombTopElement);
@@ -868,12 +859,6 @@ class AnimatorImpl implements Animator {
     guiDestination.bombVisible = true;
   }
   #guiPieces = new Map<LogicalPiece, GuiPiece>();
-  initializePiece(piece: LogicalPiece): void {
-    this.#guiPieces.set(piece, new GuiPiece(piece));
-  }
-  jumpTo(piece: LogicalPiece): void {
-    this.#guiPieces.get(piece)!.updateFinalPosition(piece);
-  }
   drawPreview(
     direction: "vertical" | "horizontal",
     pieces: readonly LogicalPiece[],
