@@ -234,6 +234,7 @@ const decorations: ReadonlyArray<string> = [
   "﹆",
   "🜇",
   "🝤",
+  "⅏",
   // https://unicodeemoticons.com/cool_text_icons_and_pictures.htm
   // https://jrgraphix.net/r/Unicode/2600-26FF
   // https://www.compart.com/en/unicode/category/So
@@ -278,6 +279,11 @@ function clearAllDecorations() {
     .forEach((element) => (element.textContent = ""));
   // TODO do I need to worry about animations?
   // GuiPiece.cancelGroup() did this:  guiPiece.element.getAnimations().forEach((animation) => animation.cancel());
+  // See GuiPiece.removeDecoration(), now.  It does a better job
+  // removing animations.  It removes the animations from the
+  // decorations, and nothing else.  That is not required
+  // when clearAllDecorations() is called, but it wouldn't
+  // hurt, either.
 }
 
 type HasPosition = { readonly rowIndex: number; columnIndex: number };
@@ -508,6 +514,14 @@ class GuiPiece {
   set bombColor(newColor) {
     this.bombElement.style.fill = newColor;
   }
+  removeDecoration() {
+    [this.decorationElement, this.decorationBackgroundElement].forEach(
+      (element) => {
+        element.textContent = "";
+        element.getAnimations().forEach((animation) => animation.cancel());
+      }
+    );
+  }
 }
 
 /**
@@ -603,6 +617,12 @@ class AnimatorImpl implements Animator {
        */
       const keep = 0.75;
       durationFactor = Math.pow(keep, request.counter - 1) * adjustable + floor;
+      if (request.flingBomb.length > 1) {
+        // Make sure the bomb dance is visible.  Slow it down down some.
+        // Never slower than the initial speed, and never faster than twice
+        // that speed.
+        durationFactor = Math.max(0.5, Math.min(1, durationFactor * 2));
+      }
     }
 
     /**
@@ -617,6 +637,24 @@ class AnimatorImpl implements Animator {
      */
     const initialDelay = 2000 * durationFactor;
 
+    const bombsToFling = request.flingBomb.map((group) =>
+      group.map(({ source, destination }) => {
+        /**
+         * `source` will be removed from `this.#guiPieces` before we are ready to start flinging the bombs.
+         * The `GuiPiece` will still be valid and visible at this time.
+         */
+        const guiSource = this.#guiPieces.get(source);
+        if (guiSource === undefined) {
+          throw new Error("wtf");
+        }
+        return {
+          logicalSource: source,
+          logicalDestination: destination,
+          guiSource,
+        };
+      })
+    );
+
     const allRemovePromises = Promise.all(
       request.remove.map((piece) => {
         const result = this.#guiPieces.get(piece)!.remove(initialDelay);
@@ -624,7 +662,15 @@ class AnimatorImpl implements Animator {
         return result;
       })
     );
-    setTimeout(() => clearAllDecorations(), initialDelay);
+    // We only want to clear the decorations if it's not flying away.
+    // Most of the pieces want to keep their decorations.  Take it away in
+    // the case where there were 5 in a group and one survived with a bomb.
+    // Only that one that survived needed this.  The pieces that are flying away
+    // have already been removed from this.#guiPieces.
+    setTimeout(
+      () => this.#guiPieces.forEach((piece) => piece.removeDecoration()),
+      initialDelay
+    );
 
     /**
      * After waiting `initialDelay` then starting the removal of the old
@@ -676,13 +722,26 @@ class AnimatorImpl implements Animator {
       maxSlideTime = Math.max(maxSlideTime, duration);
     });
 
-    // *   New from top / Piece / compute from from the list of pieces to add.  / to comes from Piece.   {readonly row:number, readonly column:number} columnindex?  already has name?
+    const allFlingPromises = Promise.all(
+      bombsToFling.flatMap((group) => {
+        const totalTime = initialDelay + removeTime + maxSlideTime;
+        return group.map((endPoints, index) => {
+          const start =
+            (Math.min(initialDelay, totalTime / 2) / (group.length + 1)) *
+            (index + 1);
+          console.log({ start, initialDelay, totalTime, group, index });
+          const duration = totalTime - start;
+          return this.flingBomb(endPoints, start, duration);
+        });
+      })
+    );
+
+    // ✔   New from top / initialRow computed by logical-board.  / destination : LogicalPiece.
     // ✔   Move / Piece / automatically deduce from & to
-    // ✔   Update bomb immediately.  / Piece
-    // *   Fling / from Piece / to Piece
+    // ✔   Update bomb immediately.  / Look at entire board.
+    // *   Fling / from LogicalPiece / to LogicalPiece
     // ✔     One list per group.  Each group will be spread out in time, but can overlap with other groups.
     // ✔   Remove LogicalPiece
-    // ✔   List of all groups for score reasons?  No.  Leave that in GroupGroupInfo.addToScore
     // ✔   Counter -- in both addToScore() and in this.
     // ✔   Move Animator.cancelGroup() to here
 
@@ -690,27 +749,30 @@ class AnimatorImpl implements Animator {
       slideActions.map((action) => action())
     );
 
-    await Promise.all([allRemovePromises, allSlidePromises]); //sleep(initialDelay + removeTime + maxSlideTime);
+    await Promise.all([allRemovePromises, allSlidePromises, allFlingPromises]);
   }
   async flingBomb(
-    source: LogicalPiece,
-    destination: LogicalPiece,
+    endPoints: {
+      logicalSource: LogicalPiece;
+      logicalDestination: LogicalPiece;
+      guiSource: GuiPiece;
+    },
     initialDelayMs: number,
     durationMs: number
   ) {
-    const sourceGui = this.#guiPieces.get(source)!;
-    const destinationGui = this.#guiPieces.get(destination)!;
+    const { logicalSource, logicalDestination, guiSource } = endPoints;
+    const guiDestination = this.#guiPieces.get(logicalDestination)!;
     /**
      * Draw this color behind the floating bomb so it will be visible
      * in front of different colored tiles.
      */
-    const backgroundColor = destination.color;
+    const backgroundColor = logicalDestination.color;
     /**
      * The color of the bomb.
      */
-    const foregroundColor = destinationGui.bombColor;
-    sourceGui.bombColor = foregroundColor;
-    sourceGui.bombVisible = true;
+    const foregroundColor = guiDestination.bombColor;
+    guiSource.bombColor = foregroundColor;
+    guiSource.bombVisible = true;
     /**
      * This g element contains two separate images.
      * Animate the g element to make everything move together.
@@ -740,8 +802,14 @@ class AnimatorImpl implements Animator {
      * The floating bomb's path.
      */
     const path = ((): string => {
-      const from: Point = { x: source.columnIndex, y: source.rowIndex };
-      const to: Point = { x: destination.columnIndex, y: destination.rowIndex };
+      const from: Point = {
+        x: logicalSource.columnIndex,
+        y: logicalSource.rowIndex,
+      };
+      const to: Point = {
+        x: logicalDestination.columnIndex,
+        y: logicalDestination.rowIndex,
+      };
       if (Math.random() < 0.3333333) {
         return spiralPath(
           from,
@@ -784,21 +852,20 @@ class AnimatorImpl implements Animator {
      * need good test!!  Export a test function to the gui.
      */
     await sleep(initialDelayMs);
-    sourceGui.bombVisible = false;
+    guiSource.bombVisible = false;
     bombParent.appendChild(bombTopElement);
     bombTopElement.style.offsetPath = `path('${path}')`;
     await bombTopElement.animate(
       { offsetDistance: ["0%", "100%"] },
       {
-        delay: initialDelayMs,
         duration: durationMs,
         iterations: 1,
-        easing: "ease-in-out",
+        easing: "ease-in",
         fill: "both",
       }
     ).finished;
     bombTopElement.remove();
-    destinationGui.bombVisible = true;
+    guiDestination.bombVisible = true;
   }
   #guiPieces = new Map<LogicalPiece, GuiPiece>();
   initializePiece(piece: LogicalPiece): void {

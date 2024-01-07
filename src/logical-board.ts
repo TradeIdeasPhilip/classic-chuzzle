@@ -243,6 +243,11 @@ export type UpdateInstructions = {
    * New pieces that the GUI has not seen before.
    */
   add: {
+    /**
+     * A suggestion for the GUI.
+     * Start the animation from this row.
+     * Then move to the location in the `piece`.
+     */
     initialRow: number;
     piece: LogicalPiece;
   }[];
@@ -261,7 +266,7 @@ export type UpdateInstructions = {
    * The animations for each piece in a group are offset slightly in time.
    * If there are multiple groups, they can overlap in time.
    */
-  flingBomb: [from: LogicalPiece, to: LogicalPiece][][];
+  flingBomb: { source: LogicalPiece; destination: LogicalPiece }[][];
   /**
    * 1 if the user just made a move.  I.e. 1st move in the series.
    * 2 if this is the first automatic move after the user's move.  I.e. 2nd move in the series.
@@ -373,18 +378,12 @@ export class LogicalBoard {
        * And hopefully remove a few more exports from Animator.
        */
       groups.forEach((group) => {
-        switch (group.length) {
-          case 3:
-          case 6: {
-            bombFlingingSources.push(group);
-            break;
-          }
-          case 5: {
-            const addBombToThisPiece = pick(group); // TODO pick the middle piece.
-            addBombToThisPiece.bomb = true;
-            immuneFromDestruction.add(addBombToThisPiece);
-            break;
-          }
+        if (group.length > 5) {
+          bombFlingingSources.push(group);
+        } else if (group.length == 5) {
+          const addBombToThisPiece = pick(group); // TODO pick the middle piece.
+          addBombToThisPiece.bomb = true;
+          immuneFromDestruction.add(addBombToThisPiece);
         }
       });
       actions.addToScore(counter);
@@ -398,11 +397,14 @@ export class LogicalBoard {
         .flat()
         .filter((piece) => !piece.bomb);
       const flingBomb = bombFlingingSources.map((group) => {
-        const trajectories: [from: LogicalPiece, to: LogicalPiece][] = [];
-        group.forEach((from) => {
-          if (availableDestinations.length > 0) {
-            const to = take(availableDestinations);
-            trajectories.push([from, to]);
+        const trajectories: {
+          source: LogicalPieceImpl;
+          destination: LogicalPieceImpl;
+        }[] = [];
+        group.forEach((source) => {
+          if (!source.bomb && availableDestinations.length > 0) {
+            const destination = take(availableDestinations);
+            trajectories.push({ source, destination });
           }
         });
         return trajectories;
@@ -420,6 +422,8 @@ export class LogicalBoard {
 
       const debugEnd1 = performance.now();
       console.log(`await updateBoard() took ${debugEnd1 - debugStart1}ms.`);
+
+      flingBomb.flat().forEach(({ destination }) => (destination.bomb = true));
 
       groups = findActionable(this.#allPieces);
       actions = this.animator.assignGroupDecorations(groups);
