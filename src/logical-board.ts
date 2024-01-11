@@ -384,6 +384,11 @@ export class LogicalBoard {
    */
   private async updateLoop(groups: Groups, actions: GroupGroupActions) {
     for (let counter = 1; groups.length > 0; counter++) {
+      /**
+       * When we get a group with exactly 5 tiles, we immediately add a bomb to one of the pieces
+       * and add that peace to this set.  This tile cannot be removed and this bomb can not be set
+       * off until the next iteration of this loop, when this variable and set are recreated.
+       */
       const immuneFromDestruction = new Set<LogicalPiece>();
       const bombFlingingSources: (readonly LogicalPieceImpl[])[] = [];
       groups.forEach((group) => {
@@ -417,7 +422,7 @@ export class LogicalBoard {
            * We need to record which new cells get deleted by these bombs.
            */
           const newBombs = recentlyDeleted.filter(
-            (logicalPiece) => logicalPiece.bomb
+            (logicalPiece) => logicalPiece.bomb && !immuneFromDestruction.has(logicalPiece)
           );
           if (newBombs.length == 0) {
             break;
@@ -441,6 +446,7 @@ export class LogicalBoard {
         }
       }
       console.log(destroyByBomb);
+      // TODO
       // need bombs
       // need to make bombs explode
       // ✔️ need to have a new category so addToScore can handle pieces that were destroyed by a bomb
