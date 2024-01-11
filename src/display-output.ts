@@ -916,7 +916,7 @@ class AnimatorImpl implements Animator {
         return { guiPieces, decorationColor, decorationText, backgroundColor };
       });
       return {
-        addToScore(counter: number) {
+        addToScore(counter: number, bombCount: number) {
           // Flash the items about to be collected.
           savedGroupInfo.forEach(({ guiPieces }) => {
             const maxOpacity = 1;
@@ -965,6 +965,28 @@ class AnimatorImpl implements Animator {
               newScoreDiv.appendChild(span);
             }
           );
+          if (bombCount > 0) {
+            if (savedGroupInfo.length > 0) {
+              newScoreDiv.append(" + ");
+            }
+            const svg = document.createElementNS(
+              "http://www.w3.org/2000/svg",
+              "svg"
+            );
+            svg.setAttribute("viewBox", "0.25 0.25 0.5 0.5");
+            const bomb = bombTemplate.cloneNode(true);
+            svg.appendChild(bomb);
+            svg.style.width = "1em";
+            svg.style.height = "1em";
+            svg.style.fill = "white";
+            const span = document.createElement("span");
+            span.innerHTML = `&nbsp;${bombCount}`;
+            span.style.color = "white";
+            span.style.borderColor = span.style.backgroundColor = "black";
+            span.classList.add("individualScore");
+            span.prepend(svg);
+            newScoreDiv.appendChild(span);
+          }
         },
         highlightGroups() {
           clearAllDecorations();

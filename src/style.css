@@ -40,11 +40,21 @@ svg text {
   padding-bottom: 0.2em;
   border-radius: 0.75em;
   font-size: 150%;
+  display: inline-flex;
+  align-items: stretch;
 }
 
 #chainBonus {
   font-size: 150%;
   margin-top: 1em;
+}
+
+#newScore {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: flex-start;
+  align-items: center;
 }
 
 .help {

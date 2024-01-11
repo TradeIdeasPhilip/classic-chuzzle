@@ -114,7 +114,7 @@ export function mathToPath(f: VectorFunction, options: Options = {}) {
  * @returns A path appropriate for use in CSS and SVG.
  */
 export function spiralPath(from: Point, to: Point, numberOfTurns: number) {
-  const f = makeSpiral(from, to, numberOfTurns);
+  const f = makeInwardSpiral(from, to, numberOfTurns);
   return mathToPath(f, { numberOfSegments: numberOfTurns * 9.001002 });
 }
 
@@ -129,7 +129,7 @@ export function spiralPath(from: Point, to: Point, numberOfTurns: number) {
  * @param numberOfTurns This should be a positive number.  Bigger numbers make longer paths.
  * @returns A function appropriate for input to `mathToPath()` or `makeComposite()`.
  */
-export function makeSpiral(
+export function makeInwardSpiral(
   from: Point,
   to: Point,
   numberOfTurns: number
@@ -153,6 +153,26 @@ export function makeSpiral(
     const offset = polarToRectangular(radius, angle);
     return { x: to.x + offset.x, y: to.y + offset.y };
   };
+}
+
+/**
+ * This is the same as `makeInwardSpiral()` but it goes in the opposite direction.
+ * @param from The staring point of the path.
+ * The point to draw at t==0.
+ * This is at the center of the spiral.
+ * @param to The ending point of the path.
+ * The point to draw at t==1.
+ * This is on the outside of the spiral.
+ * @param numberOfTurns This should be a positive number.  Bigger numbers make longer paths.
+ * @returns A function appropriate for input to `mathToPath()` or `makeComposite()`.
+ */
+export function makeOutwardSpiral(
+  from: Point,
+  to: Point,
+  numberOfTurns: number
+): VectorFunction {
+  const spiral = makeInwardSpiral(to, from, numberOfTurns);
+  return (t: number) => spiral(1 - t);
 }
 
 /**

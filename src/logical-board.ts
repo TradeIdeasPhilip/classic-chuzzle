@@ -164,11 +164,14 @@ type Groups = readonly (readonly LogicalPieceImpl[])[];
  */
 export type GroupGroupActions = {
   /**
-   *  Called when we first start to collect the groups.  I.e. right before the pieces start flying off the board.
+   * Called when we first start to collect the groups.  I.e. right before the pieces start flying off the board.
    * @param counter How many times in a rowIndex we've collected a group since the user's last move.  1 for the first time,
    * 2 for the second, etc.
+   * @param bombCount The number of cells destroyed by a bomb.
+   * If something was in a group, and destroyed by a bomb, the
+   * group gets the score, not this.
    */
-  addToScore(counter: number): void;
+  addToScore(counter: number, bombCount: number): void;
   /**
    * Show which pieces are about to be collected or would hypothetically
    * be collected if the user let go now.
@@ -226,6 +229,11 @@ export type Animator = {
     direction: "vertical" | "horizontal",
     pieces: readonly LogicalPiece[]
   ): Promise<void>;
+
+  /**
+   *
+   * @param groups
+   */
   assignGroupDecorations(groups: Groups): GroupGroupActions;
 
   /**
@@ -272,6 +280,19 @@ export type UpdateInstructions = {
    * If there are multiple groups, they can overlap in time.
    */
   flingBomb: { source: LogicalPiece; destination: LogicalPiece }[][];
+  /**
+   * All of these pieces will go away.
+   *
+   * The GUI will highlight the pieces in `destroyByBomb[0]` all at once, then a brief pause, then
+   * the pieces in `destroyByBomb[1]` all at once.  This is to show how one bomb can set off a second bomb, which
+   * then sets off a third.
+   *
+   * These pieces move off the board _after_ they have been highlighted
+   * for a moment, similar to making the other pieces fly away _after_
+   * the group decorations flashed for a moment.  So the user knows
+   * why the each piece is being destroyed.
+   */
+  destroyByBomb: LogicalPiece[][];
   /**
    * 1 if the user just made a move.  I.e. 1st move in the series.
    * 2 if this is the first automatic move after the user's move.  I.e. 2nd move in the series.
@@ -365,21 +386,6 @@ export class LogicalBoard {
     for (let counter = 1; groups.length > 0; counter++) {
       const immuneFromDestruction = new Set<LogicalPiece>();
       const bombFlingingSources: (readonly LogicalPieceImpl[])[] = [];
-      /** TODO
-       * Display groups and make them flash and add them to the scoreboard.
-       * Mark some things as bombs and other things as need to destroy.
-       * Find the final positions
-       * call Animator.updateBoard()!
-       *   does this:
-       *
-       * source location should always be what's in the GuiPiece when this request comes in.
-       * destination location should always be what's in the LogicalPiece
-       *
-       * Add Animator.newBoard()?
-       * Init all new pieces in newBoard() or updateBoard().
-       * Remove initializePiece() and destroyPiece() from Animator.
-       * And hopefully remove a few more exports from Animator.
-       */
       groups.forEach((group) => {
         if (group.length > 5) {
           bombFlingingSources.push(group);
@@ -389,7 +395,73 @@ export class LogicalBoard {
           immuneFromDestruction.add(addBombToThisPiece);
         }
       });
-      actions.addToScore(counter);
+      /**
+       * All of these pieces will go away.
+       *
+       * The GUI will highlight the pieces in `destroyByBomb[0]` all at once, then a brief pause, then
+       * the pieces in `destroyByBomb[1]` all at once.  This is to show how one bomb can set off a second bomb, which
+       * then sets off a third.
+       *
+       * These pieces move off the board _after_ they have been highlighted
+       * for a moment, similar to making the other pieces fly away _after_
+       * the group decorations flashed for a moment.  So the user knows
+       * why the each piece is being destroyed.
+       */
+      const destroyByBomb: LogicalPiece[][] = [];
+      {
+        let recentlyDeleted = groups.flat();
+        const alreadyHandled = new Set<LogicalPiece>(recentlyDeleted);
+        while (true) {
+          /**
+           * These bombs were set off in the previous round.
+           * We need to record which new cells get deleted by these bombs.
+           */
+          const newBombs = recentlyDeleted.filter(
+            (logicalPiece) => logicalPiece.bomb
+          );
+          if (newBombs.length == 0) {
+            break;
+          }
+          recentlyDeleted.length = 0;
+          for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
+            for (let columnOffset = -1; columnOffset <= 1; columnOffset++) {
+              newBombs.forEach((piece) => {
+                const possible =
+                  this.#allPieces[piece.rowIndex + rowOffset]?.[
+                    piece.columnIndex + columnOffset
+                  ];
+                if (possible && !alreadyHandled.has(possible)) {
+                  recentlyDeleted.push(possible);
+                  alreadyHandled.add(possible);
+                }
+              });
+            }
+          }
+          destroyByBomb.push(recentlyDeleted);
+        }
+      }
+      console.log(destroyByBomb);
+      // need bombs
+      // need to make bombs explode
+      // ✔️ need to have a new category so addToScore can handle pieces that were destroyed by a bomb
+      //   and only by a bomb.  If a piece was already part of a group, score it with the group.
+      // ✔️ the score just gets a total number of cells bombed.
+      // in Animator.updateBoard() we need to highlight the cells that are getting destroyed by a bomb.
+      //   Make the bomb flash, just where the group decoration would have been.
+      //   Make all bombs flash between black and white.
+      //   Make them all have similar but slightly different periods.
+      //   Group them based on time.
+      //   First the group decorations start to flash.
+      //   Then after a short pause we highlight any cells next to any bombs that were in the groups.
+      //   Then after another short pause we highlight any cells next to any bombs that got set off in the previous line.
+      //   And repeat forever.
+      //   Maybe all new flashing bombs that appear at the same time flash at the same rate.
+      //   And each generation flashes faster than the previous generation.
+      // And these cells need to disappear.
+      //   spiral outward from the current position, unlike the groups that leave in a straight line.
+      //   require more time?  Start a little early?
+      // Delete these items just like items in the groups.  They will be filled in the same way.
+      actions.addToScore(counter, destroyByBomb.flat().length);
 
       const piecesToRemove = groups.flatMap((group) =>
         group.filter((piece) => !immuneFromDestruction.has(piece))
@@ -417,6 +489,7 @@ export class LogicalBoard {
         remove: piecesToRemove,
         counter,
         flingBomb,
+        destroyByBomb,
         add: piecesToAdd,
       });
 
