@@ -136,6 +136,8 @@ export const decorationColors: ReadonlyMap<
  * And in part because its fun to go looking for new interesting unicode characters.
  */
 const decorations: ReadonlyArray<string> = [
+  "ॐ",
+  "࿄",
   "༟",
   "༴",
   "℣",

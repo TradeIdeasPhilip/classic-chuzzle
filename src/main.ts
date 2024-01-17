@@ -12,50 +12,55 @@ import {
 } from "./math-to-path";
 import { assertClass } from "./utility";
 import { pick, sleep } from "phil-lib/misc";
-/*
-{
-  // BACKGROUND ANIMATION
-  const [black, white] = getById("background", SVGGElement).querySelectorAll(
-    "circle"
+
+const animateBackground = true;
+if (animateBackground) {
+  {
+    // BACKGROUND ANIMATION
+    const [black, white] = getById("background", SVGGElement).querySelectorAll(
+      "circle"
+    );
+    black.animate(
+      [{ transform: "rotate(720deg)" }, { transform: "rotate(0deg)" }],
+      { duration: 67973, easing: "ease", iterations: Infinity }
+    );
+    white.animate(
+      [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }],
+      {
+        duration: 19701,
+        easing: "cubic-bezier(0.42, 0, 0.32, 1.83)",
+        iterations: Infinity,
+      }
+    );
+  }
+
+  getById("thinPatternLine", SVGLineElement).animate(
+    colors.flatMap((color, index) => [
+      { stroke: "black", offset: index / colors.length },
+      { stroke: color, offset: (index + 0.25) / colors.length },
+      { stroke: color, offset: (index + 0.75) / colors.length },
+      { stroke: "black", offset: (index + 1) / colors.length },
+    ]),
+    { duration: 4000 * colors.length, iterations: Infinity }
   );
-  black.animate(
-    [{ transform: "rotate(720deg)" }, { transform: "rotate(0deg)" }],
-    { duration: 67973, easing: "ease", iterations: Infinity }
+  getById("thickPatternLine", SVGLineElement).animate(
+    colors.flatMap((color, index) => [
+      { stroke: "white", offset: index / colors.length },
+      { stroke: color, offset: (index + 0.25) / colors.length },
+      { stroke: color, offset: (index + 0.75) / colors.length },
+      { stroke: "white", offset: (index + 1) / colors.length },
+    ]),
+    { duration: 4321 * colors.length, iterations: Infinity }
   );
-  white.animate(
-    [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }],
-    {
-      duration: 19701,
-      easing: "cubic-bezier(0.42, 0, 0.32, 1.83)",
-      iterations: Infinity,
-    }
+
+  getById("main", SVGSVGElement).animate(
+    { backgroundColor: ["#202020", "#e0e0e0", "#202020"] },
+    { duration: 97531, direction: "alternate", iterations: Infinity }
   );
+} else {
+  getById("background", SVGGElement).style.display = "none";
 }
 
-getById("thinPatternLine", SVGLineElement).animate(
-  colors.flatMap((color, index) => [
-    { stroke: "black", offset: index / colors.length },
-    { stroke: color, offset: (index + 0.25) / colors.length },
-    { stroke: color, offset: (index + 0.75) / colors.length },
-    { stroke: "black", offset: (index + 1) / colors.length },
-  ]),
-  { duration: 4000 * colors.length, iterations: Infinity }
-);
-getById("thickPatternLine", SVGLineElement).animate(
-  colors.flatMap((color, index) => [
-    { stroke: "white", offset: index / colors.length },
-    { stroke: color, offset: (index + 0.25) / colors.length },
-    { stroke: color, offset: (index + 0.75) / colors.length },
-    { stroke: "white", offset: (index + 1) / colors.length },
-  ]),
-  { duration: 4321 * colors.length, iterations: Infinity }
-);
-
-getById("main", SVGSVGElement).animate(
-  { backgroundColor: ["#202020", "#e0e0e0", "#202020"] },
-  { duration: 97531, direction: "alternate", iterations: Infinity }
-);
-*/
 initializeUserInputs(new LogicalBoard(animator));
 
 async function testMathToPath() {

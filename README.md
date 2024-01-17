@@ -57,6 +57,21 @@ There are multiple layers each with partial transparency and animations of their
 
 This seems overblown, but it's the easiest to test.
 
+**Result:**
+
+I disabled the background and everything got a lot faster.
+My phone didn't didn't have any problems with the remaining animations.
+My browser was not having problems, but when I checked the task manager, the version with an animated background was using a lot more resources.
+
+This should not have been a complete surprise.
+The squares don't always line up perfectly.
+Sometimes you can see the background moving between two adjacent squares.
+
+I tried fixing this problem by making the squares 1% bigger than they need to be.
+(Ideally I'd add just one pixel, but that's hard in SVG.)
+I didn't notice any changes in my browser.
+I'll know more when I test this on my phone.
+
 ### Grouping Moving Objects
 
 This approach has helped me before on other projects.
