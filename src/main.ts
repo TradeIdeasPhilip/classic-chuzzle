@@ -12,7 +12,7 @@ import {
 } from "./math-to-path";
 import { assertClass } from "./utility";
 import { pick, sleep } from "phil-lib/misc";
-
+/*
 {
   // BACKGROUND ANIMATION
   const [black, white] = getById("background", SVGGElement).querySelectorAll(
@@ -55,7 +55,7 @@ getById("main", SVGSVGElement).animate(
   { backgroundColor: ["#202020", "#e0e0e0", "#202020"] },
   { duration: 97531, direction: "alternate", iterations: Infinity }
 );
-
+*/
 initializeUserInputs(new LogicalBoard(animator));
 
 async function testMathToPath() {
