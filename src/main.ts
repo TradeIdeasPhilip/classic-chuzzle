@@ -13,7 +13,8 @@ import {
 import { assertClass } from "./utility";
 import { pick, sleep } from "phil-lib/misc";
 
-const animateBackground = true;
+const animateBackground = false;
+const showBackground = true;
 if (animateBackground) {
   {
     // BACKGROUND ANIMATION
@@ -57,7 +58,8 @@ if (animateBackground) {
     { backgroundColor: ["#202020", "#e0e0e0", "#202020"] },
     { duration: 97531, direction: "alternate", iterations: Infinity }
   );
-} else {
+}
+if (!showBackground) {
   getById("background", SVGGElement).style.display = "none";
 }
 

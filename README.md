@@ -73,6 +73,13 @@ I didn't notice any changes in my browser or on my phone.
 I could see the extra pixels, and I couldn't see as much of the background.
 But the performance was still bad on my phone.
 
+I tried adding a rectangle completely hiding the background, but leaving the animation on.
+That also had bad performance.
+
+I tried leaving the background but disabling all the background animations.  
+That seems to be working better.
+Tests are still in progress.
+
 ### Grouping Moving Objects
 
 This approach has helped me before on other projects.

@@ -125,6 +125,26 @@ export const decorationColors: ReadonlyMap<
       "chartreuse",
     ],
   ],
+  [
+    "white",
+    [
+      "green",
+      "red",
+      "blue",
+      "cadetblue",
+      "aqua",
+      "chartreuse",
+      "coral",
+      "darkblue",
+      "darkgoldenrod",
+      "darkgreen",
+      "darkmagenta",
+      "darkorange",
+      "fuchsia",
+      "tomato",
+      "peru",
+    ],
+  ],
 ]);
 
 /**
@@ -136,6 +156,20 @@ export const decorationColors: ReadonlyMap<
  * And in part because its fun to go looking for new interesting unicode characters.
  */
 const decorations: ReadonlyArray<string> = [
+  "୰",
+  "༕",
+  "࿈",
+  "࿊",
+  "᭧",
+  "℆",
+  "℥",
+  "⅊",
+  "⇰",
+  "⌬",
+  "⍩",
+  "⎃",
+  "⎗",
+  "⏕",
   "ॐ",
   "࿄",
   "༟",

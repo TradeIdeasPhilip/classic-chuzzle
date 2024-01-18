@@ -99,7 +99,7 @@ function rotateUp(
  *
  * Currently these are all valid html colors but at some point I need to add "rainbow".
  */
-export type Color = "red" | "green" | "blue" | "yellow" | "orange" | "violet";
+export type Color = "red" | "green" | "blue" | "yellow" | "orange" | "violet" | "white";
 
 /**
  * Each legal color listed once.
@@ -111,6 +111,7 @@ export const colors: readonly Color[] = [
   "yellow",
   "orange",
   "violet",
+  "white"
 ];
 
 /**
