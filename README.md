@@ -69,8 +69,9 @@ Sometimes you can see the background moving between two adjacent squares.
 
 I tried fixing this problem by making the squares 1% bigger than they need to be.
 (Ideally I'd add just one pixel, but that's hard in SVG.)
-I didn't notice any changes in my browser.
-I'll know more when I test this on my phone.
+I didn't notice any changes in my browser or on my phone.
+I could see the extra pixels, and I couldn't see as much of the background.
+But the performance was still bad on my phone.
 
 ### Grouping Moving Objects
 
