@@ -23,44 +23,7 @@
       stroke-width="0.1"
       id="main"
     >
-      <defs>
-        <pattern
-          id="pattern_1"
-          patternUnits="userSpaceOnUse"
-          width="0.5"
-          height="0.5"
-        >
-          <line
-            x1="0"
-            y="0"
-            x2="0"
-            y2="0.5"
-            stroke="black"
-            stroke-width="0.07"
-            id="thinPatternLine"
-          />
-        </pattern>
-        <pattern
-          id="pattern_2"
-          patternUnits="userSpaceOnUse"
-          width="0.643"
-          height="0.643"
-        >
-          <line
-            x1="0"
-            y="0"
-            x2="0"
-            y2="0.643"
-            stroke="white"
-            stroke-width="0.09"
-            id="thickPatternLine"
-          />
-        </pattern>
-      </defs>
-      <g id="background">
-        <circle r="4.25" cx="3" cy="3" fill="url(#pattern_1)" />
-        <circle r="4.25" cx="3" cy="3" fill="url(#pattern_2)" />
-      </g>
+      <g id="background"></g>
       <rect id="curtain" width="6" height="6" fill="darkblue"></rect>
       <g id="board"></g>
     </svg>
@@ -90,12 +53,12 @@
         </g>
       </svg>
     </template>
-    <div id="debugButtons"></div>
     <div id="scoreboard">
       <div id="newScore"></div>
       <div id="chainBonus"></div>
     </div>
     <br />
+    <div id="debugButtons"></div>
     <br />
     <p class="help" style="background-color: black; color: yellow">
       Click and drag to move a row or column. Connect 3 or more of the same

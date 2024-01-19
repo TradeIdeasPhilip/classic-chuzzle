@@ -11,7 +11,7 @@ import {
   spiralPath,
 } from "./math-to-path";
 import { assertClass } from "./utility";
-import { pick, sleep } from "phil-lib/misc";
+import { count, initializedArray, pick, sleep } from "phil-lib/misc";
 
 {
   class UniqueId {
@@ -49,31 +49,50 @@ import { pick, sleep } from "phil-lib/misc";
   type Pauseable = Pick<Animation, "play" | "pause">;
 
   const rotations: Pauseable[] = [];
-  {
-    // BACKGROUND ANIMATION
-    const [black, white] = getById("background", SVGGElement).querySelectorAll(
-      "circle"
-    );
-    rotations.push(
-      black.animate(
-        [{ transform: "rotate(720deg)" }, { transform: "rotate(0deg)" }],
-        { duration: 67973, easing: "ease", iterations: Infinity }
-      )
-    );
-    rotations.push(
-      white.animate(
-        [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }],
-        {
-          duration: 19701,
-          easing: "cubic-bezier(0.42, 0, 0.32, 1.83)",
-          iterations: Infinity,
-        }
-      )
-    );
-  }
+  // BACKGROUND ANIMATION
+  const backgroundElement = getById("background", SVGGElement);
+  const [black, white] = initializedArray(2, () => {
+    const result = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    backgroundElement.appendChild(result);
+    result.style.transformOrigin = "3px 3px";
+    const difference = (LogicalBoard.SIZE * (Math.SQRT2 - 1)) / 2;
+    const min = 0 - difference;
+    const max = LogicalBoard.SIZE + difference;
+    for (const y of count(min, max)) {
+      const line = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "line"
+      );
+      line.x1.baseVal.value = min;
+      line.y1.baseVal.value = y;
+      line.x2.baseVal.value = max;
+      line.y2.baseVal.value = y;
+      line.style.strokeWidth = "0.1";
+      line.style.strokeLinecap = "round";
+      //line.style.stroke = "hotpink";
+      result.appendChild(line);
+    }
+    return result;
+  });
+  rotations.push(
+    black.animate(
+      [{ transform: "rotate(720deg)" }, { transform: "rotate(0deg)" }],
+      { duration: 67973, easing: "ease", iterations: Infinity }
+    )
+  );
+  rotations.push(
+    white.animate(
+      [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }],
+      {
+        duration: 19701,
+        easing: "cubic-bezier(0.42, 0, 0.32, 1.83)",
+        iterations: Infinity,
+      }
+    )
+  );
 
   const lineColors: Pauseable[] = [
-    getById("thinPatternLine", SVGLineElement).animate(
+    black.animate(
       colors.flatMap((color, index) => [
         { stroke: "black", offset: index / colors.length },
         { stroke: color, offset: (index + 0.25) / colors.length },
@@ -82,7 +101,7 @@ import { pick, sleep } from "phil-lib/misc";
       ]),
       { duration: 4000 * colors.length, iterations: Infinity }
     ),
-    getById("thickPatternLine", SVGLineElement).animate(
+    white.animate(
       colors.flatMap((color, index) => [
         { stroke: "white", offset: index / colors.length },
         { stroke: color, offset: (index + 0.25) / colors.length },
@@ -101,7 +120,7 @@ import { pick, sleep } from "phil-lib/misc";
   (
     [
       [rotations, "line rotations", "checked"],
-      [lineColors, "line colors", "unchecked"],
+      [lineColors, "line colors", "checked"],
       [[backWallColors], "back wall colors", "checked"],
     ] as const
   ).forEach(([pauseables, text, initialState]) => {
@@ -111,7 +130,6 @@ import { pick, sleep } from "phil-lib/misc";
     });
   });
 
-  const backgroundElement = getById("background", SVGGElement);
   const curtainElement = getById("curtain", SVGRectElement);
   (
     [
