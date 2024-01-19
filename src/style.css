@@ -99,3 +99,7 @@ text.crystal-decoration-background {
   display: flex;
   align-items: center;
 }
+
+line {
+  stroke:blue;
+}

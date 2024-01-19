@@ -89,7 +89,12 @@ It seems like that animation forced the GPU to do a lot of work even little or _
 That left very little GPU for animating the squares.
 
 I should be able to create an alternate plan.
-Like drawing a bunch of lines on a <g> element, instead of using a pattern to repeat a single line.
+Like drawing a bunch of lines on a `<g>` element, instead of using a pattern to repeat a single line.
+
+I tried the `<g>`with multiple `<line>` elements.
+The results were similar.
+If I stop the color animation or I do not display the background, performance is good.  Otherwise it it bad.
+I wonder if it's slow to pick the colors. 
 
 ### Grouping Moving Objects
 
