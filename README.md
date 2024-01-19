@@ -80,6 +80,17 @@ I tried leaving the background but disabling all the background animations.
 That seems to be working better.
 Tests are still in progress.
 
+**Success:**
+
+I found the problem:
+Changing the color of the background lines.
+If I disable that, everything works much better.
+It seems like that animation forced the GPU to do a lot of work even little or _none_ of these patterns is visible.
+That left very little GPU for animating the squares.
+
+I should be able to create an alternate plan.
+Like drawing a bunch of lines on a <g> element, instead of using a pattern to repeat a single line.
+
 ### Grouping Moving Objects
 
 This approach has helped me before on other projects.

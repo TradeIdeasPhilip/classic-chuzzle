@@ -100,12 +100,12 @@ import { pick, sleep } from "phil-lib/misc";
 
   (
     [
-      [rotations, "line rotations"],
-      [lineColors, "line colors"],
-      [[backWallColors], "back wall colors"],
+      [rotations, "line rotations", "checked"],
+      [lineColors, "line colors", "unchecked"],
+      [[backWallColors], "back wall colors", "checked"],
     ] as const
-  ).forEach(([pauseables, text]) => {
-    addCheckBox(`Animate ${text}`, "checked", (currentlyChecked): void => {
+  ).forEach(([pauseables, text, initialState]) => {
+    addCheckBox(`Animate ${text}`, initialState, (currentlyChecked): void => {
       const action = currentlyChecked ? "play" : "pause";
       pauseables.forEach((pauseable) => pauseable[action]());
     });
@@ -120,7 +120,7 @@ import { pick, sleep } from "phil-lib/misc";
     ] as const
   ).forEach(([element, text, initialState]) => {
     addCheckBox(`Show ${text}`, initialState, (currentlyChecked) => {
-      element.style.display = currentlyChecked?"":"none"
+      element.style.display = currentlyChecked ? "" : "none";
     });
   });
 }
