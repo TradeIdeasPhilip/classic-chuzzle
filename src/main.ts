@@ -13,54 +13,116 @@ import {
 import { assertClass } from "./utility";
 import { pick, sleep } from "phil-lib/misc";
 
-const animateBackground = false;
-const showBackground = true;
-if (animateBackground) {
+{
+  class UniqueId {
+    private constructor() {
+      throw new Error("wtf");
+    }
+    static #next = 0;
+    static get next(): string {
+      return `Unique_${this.#next++}`;
+    }
+  }
+
+  const addCheckBox = (
+    text: string,
+    initialState: "checked" | "unchecked",
+    action: (currentlyChecked: boolean) => void
+  ) => {
+    const initiallyChecked = initialState == "checked";
+    const inputId = UniqueId.next;
+    const div = document.createElement("div");
+    getById("debugButtons", HTMLDivElement).appendChild(div);
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = initiallyChecked;
+    input.id = inputId;
+    div.appendChild(input);
+    const label = document.createElement("label");
+    label.innerText = text;
+    label.htmlFor = inputId;
+    div.appendChild(label);
+    action(initiallyChecked);
+    input.addEventListener("change", () => action(input.checked));
+  };
+
+  type Pauseable = Pick<Animation, "play" | "pause">;
+
+  const rotations: Pauseable[] = [];
   {
     // BACKGROUND ANIMATION
     const [black, white] = getById("background", SVGGElement).querySelectorAll(
       "circle"
     );
-    black.animate(
-      [{ transform: "rotate(720deg)" }, { transform: "rotate(0deg)" }],
-      { duration: 67973, easing: "ease", iterations: Infinity }
+    rotations.push(
+      black.animate(
+        [{ transform: "rotate(720deg)" }, { transform: "rotate(0deg)" }],
+        { duration: 67973, easing: "ease", iterations: Infinity }
+      )
     );
-    white.animate(
-      [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }],
-      {
-        duration: 19701,
-        easing: "cubic-bezier(0.42, 0, 0.32, 1.83)",
-        iterations: Infinity,
-      }
+    rotations.push(
+      white.animate(
+        [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }],
+        {
+          duration: 19701,
+          easing: "cubic-bezier(0.42, 0, 0.32, 1.83)",
+          iterations: Infinity,
+        }
+      )
     );
   }
 
-  getById("thinPatternLine", SVGLineElement).animate(
-    colors.flatMap((color, index) => [
-      { stroke: "black", offset: index / colors.length },
-      { stroke: color, offset: (index + 0.25) / colors.length },
-      { stroke: color, offset: (index + 0.75) / colors.length },
-      { stroke: "black", offset: (index + 1) / colors.length },
-    ]),
-    { duration: 4000 * colors.length, iterations: Infinity }
-  );
-  getById("thickPatternLine", SVGLineElement).animate(
-    colors.flatMap((color, index) => [
-      { stroke: "white", offset: index / colors.length },
-      { stroke: color, offset: (index + 0.25) / colors.length },
-      { stroke: color, offset: (index + 0.75) / colors.length },
-      { stroke: "white", offset: (index + 1) / colors.length },
-    ]),
-    { duration: 4321 * colors.length, iterations: Infinity }
-  );
+  const lineColors: Pauseable[] = [
+    getById("thinPatternLine", SVGLineElement).animate(
+      colors.flatMap((color, index) => [
+        { stroke: "black", offset: index / colors.length },
+        { stroke: color, offset: (index + 0.25) / colors.length },
+        { stroke: color, offset: (index + 0.75) / colors.length },
+        { stroke: "black", offset: (index + 1) / colors.length },
+      ]),
+      { duration: 4000 * colors.length, iterations: Infinity }
+    ),
+    getById("thickPatternLine", SVGLineElement).animate(
+      colors.flatMap((color, index) => [
+        { stroke: "white", offset: index / colors.length },
+        { stroke: color, offset: (index + 0.25) / colors.length },
+        { stroke: color, offset: (index + 0.75) / colors.length },
+        { stroke: "white", offset: (index + 1) / colors.length },
+      ]),
+      { duration: 4321 * colors.length, iterations: Infinity }
+    ),
+  ];
 
-  getById("main", SVGSVGElement).animate(
+  const backWallColors: Pauseable = getById("main", SVGSVGElement).animate(
     { backgroundColor: ["#202020", "#e0e0e0", "#202020"] },
     { duration: 97531, direction: "alternate", iterations: Infinity }
   );
-}
-if (!showBackground) {
-  getById("background", SVGGElement).style.display = "none";
+
+  (
+    [
+      [rotations, "line rotations"],
+      [lineColors, "line colors"],
+      [[backWallColors], "back wall colors"],
+    ] as const
+  ).forEach(([pauseables, text]) => {
+    addCheckBox(`Animate ${text}`, "checked", (currentlyChecked): void => {
+      const action = currentlyChecked ? "play" : "pause";
+      pauseables.forEach((pauseable) => pauseable[action]());
+    });
+  });
+
+  const backgroundElement = getById("background", SVGGElement);
+  const curtainElement = getById("curtain", SVGRectElement);
+  (
+    [
+      [backgroundElement, "background", "checked"],
+      [curtainElement, "curtain", "unchecked"],
+    ] as const
+  ).forEach(([element, text, initialState]) => {
+    addCheckBox(`Show ${text}`, initialState, (currentlyChecked) => {
+      element.style.display = currentlyChecked?"":"none"
+    });
+  });
 }
 
 initializeUserInputs(new LogicalBoard(animator));

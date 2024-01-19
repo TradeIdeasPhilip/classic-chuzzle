@@ -99,7 +99,14 @@ function rotateUp(
  *
  * Currently these are all valid html colors but at some point I need to add "rainbow".
  */
-export type Color = "red" | "green" | "blue" | "yellow" | "orange" | "violet" | "white";
+export type Color =
+  | "red"
+  | "green"
+  | "blue"
+  | "yellow"
+  | "orange"
+  | "violet"
+  | "whitesmoke";
 
 /**
  * Each legal color listed once.
@@ -111,7 +118,7 @@ export const colors: readonly Color[] = [
   "yellow",
   "orange",
   "violet",
-  "white"
+  "whitesmoke",
 ];
 
 /**
@@ -423,7 +430,8 @@ export class LogicalBoard {
            * We need to record which new cells get deleted by these bombs.
            */
           const newBombs = recentlyDeleted.filter(
-            (logicalPiece) => logicalPiece.bomb && !immuneFromDestruction.has(logicalPiece)
+            (logicalPiece) =>
+              logicalPiece.bomb && !immuneFromDestruction.has(logicalPiece)
           );
           if (newBombs.length == 0) {
             break;

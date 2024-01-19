@@ -84,3 +84,18 @@ text.crystal-decoration-background {
   border-style: solid;
   white-space: nowrap;
 }
+
+#debugButtons {
+  display: flex;
+  gap: 0.25em;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.75rem;
+  margin-right: 4px;
+}
+
+#debugButtons > div {
+  display: flex;
+  align-items: center;
+}

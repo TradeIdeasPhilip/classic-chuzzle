@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>★ Classic Chuzzle</title>
     
-    <script type="module" crossorigin src="./assets/main-5cf5a5a5.js"></script>
-    <link rel="stylesheet" href="./assets/index-60069792.css">
+    <script type="module" crossorigin src="./assets/main-cb63b5d0.js"></script>
+    <link rel="stylesheet" href="./assets/index-5477c825.css">
   </head>
   <body>
     <svg
@@ -63,7 +63,7 @@
         <circle r="4.25" cx="3" cy="3" fill="url(#pattern_1)" />
         <circle r="4.25" cx="3" cy="3" fill="url(#pattern_2)" />
       </g>
-      <rect style="display:none" data-notes="curtain" width="6" height="6" fill="darkblue"></rect>
+      <rect id="curtain" width="6" height="6" fill="darkblue"></rect>
       <g id="board"></g>
     </svg>
     <template id="piece">
@@ -92,6 +92,7 @@
         </g>
       </svg>
     </template>
+    <div id="debugButtons"></div>
     <div id="scoreboard">
       <div id="newScore"></div>
       <div id="chainBonus"></div>

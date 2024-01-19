@@ -126,7 +126,7 @@ export const decorationColors: ReadonlyMap<
     ],
   ],
   [
-    "white",
+    "whitesmoke",
     [
       "green",
       "red",
