@@ -93,22 +93,30 @@ import { count, initializedArray, pick, sleep } from "phil-lib/misc";
 
   const lineColors: Pauseable[] = [
     black.animate(
-      colors.flatMap((color, index) => [
-        { stroke: "black", offset: index / colors.length },
-        { stroke: color, offset: (index + 0.25) / colors.length },
-        { stroke: color, offset: (index + 0.75) / colors.length },
-        { stroke: "black", offset: (index + 1) / colors.length },
+      colors.flatMap((color, index, array) => [
+        { stroke: "black", offset: index / array.length },
+        { stroke: color, offset: (index + 0.25) / array.length },
+        { stroke: color, offset: (index + 0.75) / array.length },
+        { stroke: "black", offset: (index + 1) / array.length },
       ]),
-      { duration: 4000 * colors.length, iterations: Infinity }
+      {
+        duration: 3210 * colors.length,
+        iterations: Infinity,
+        easing: `steps(${colors.length * 2}, jump-start)`,
+      }
     ),
     white.animate(
-      colors.flatMap((color, index) => [
-        { stroke: "white", offset: index / colors.length },
-        { stroke: color, offset: (index + 0.25) / colors.length },
-        { stroke: color, offset: (index + 0.75) / colors.length },
-        { stroke: "white", offset: (index + 1) / colors.length },
+      colors.flatMap((color, index, array) => [
+        { stroke: "white", offset: index / array.length },
+        { stroke: color, offset: (index + 0.25) / array.length },
+        { stroke: color, offset: (index + 0.75) / array.length },
+        { stroke: "white", offset: (index + 1) / array.length },
       ]),
-      { duration: 4321 * colors.length, iterations: Infinity }
+      {
+        duration: 4321 * colors.length,
+        iterations: Infinity,
+        easing: `steps(${colors.length * 2}, jump-start)`,
+      }
     ),
   ];
 
