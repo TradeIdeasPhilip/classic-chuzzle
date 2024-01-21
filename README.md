@@ -43,8 +43,45 @@ I am surprised by the difference.
 I'm doing things similar to what I did in https://tradeideasphilip.github.io/divide-by-zero/.
 And that worked _well_ on my phone.
 
-There are a few different approaches I want to try.
-I don't know the exact problem, so I'm exploring.
+### The Problem
+
+After a lot of trial and error I finally discovered this.
+
+* There was a _conflict_ between my rotation animations and my additional animations that overlapped with the rotations.
+* When I create a rotation animation on a `<g>` or a `<rect>`, SVG automatically does some caching.
+  * That makes the rotation very smooth and efficient.
+  * It works great by itself.
+* When I try to change the colors, size or shape of the rotating object, that breaks the cache.
+  * _Every frame_ the second animation will invalidate the cache.
+  * And _every frame_ the cache will be rebuild.
+  * The invalidating often happens when nothing really changed, like changing the fill for a group when all of the group's children have an explicit fill.
+  * The cache is rebuilt even if the `<g>` or `<rect>` is completely covered by other objects.
+* When I `pause()` the rotation animation, it does _not_ prevent this problem!
+  * That caused me a lot of confusion.
+  * When I commented out the rotation, everything got better.
+
+### Short Term Plan
+
+For now I'm happy with the current background animation.
+It's a little different than what I initially pictured, but it looks nice and it is efficient.
+
+However, I might want to learn more about this problem just for my own info.
+Based on my most recent test results, this is what I'd like to try next:
+
+* What if I create the animations in the opposite order?
+  * So the rotation animation will know about the other animations.
+  * And hopefully plan accordingly.
+* What if I put the `rotate()` and `scale()` into the same animation?
+  * The the animation code can see both of these at once.
+* What if I broke the rotating group into smaller pieces?
+  * Maybe it would cache the smaller pieces and do a better job.
+  * This would be a perfect place to use CSS motion path animations.
+* What if I did the rotation using `getAnimationFrame()`?
+  * (So the system wouldn't know that I was planning to do more rotations.)
+  * And did the rest of the animations via CSS and the animation API.  
+
+The rest of these solutions are from earlier brainstorming sessions.
+They are still interesting, but they are no longer urgent.
 
 ### Simpler Background
 
@@ -55,46 +92,14 @@ In the previous example the animations were all drawn on top of a static bitmap 
 This project uses more complicated backgrounds.
 There are multiple layers each with partial transparency and animations of their own.
 
-This seems overblown, but it's the easiest to test.
+*My initial thoughts:* This seems overblown, but it's the easiest to test.
 
-**Result:**
+I had that backwards.
+It was complicated to test because so multiple elements were interacting with each other.
+And this did lead me to the problem and the workaround.
 
-I disabled the background and everything got a lot faster.
-My phone didn't didn't have any problems with the remaining animations.
-My browser was not having problems, but when I checked the task manager, the version with an animated background was using a lot more resources.
-
-This should not have been a complete surprise.
-The squares don't always line up perfectly.
-Sometimes you can see the background moving between two adjacent squares.
-
-I tried fixing this problem by making the squares 1% bigger than they need to be.
-(Ideally I'd add just one pixel, but that's hard in SVG.)
-I didn't notice any changes in my browser or on my phone.
-I could see the extra pixels, and I couldn't see as much of the background.
-But the performance was still bad on my phone.
-
-I tried adding a rectangle completely hiding the background, but leaving the animation on.
-That also had bad performance.
-
-I tried leaving the background but disabling all the background animations.  
-That seems to be working better.
-Tests are still in progress.
-
-**Success:**
-
-I found the problem:
-Changing the color of the background lines.
-If I disable that, everything works much better.
-It seems like that animation forced the GPU to do a lot of work even little or _none_ of these patterns is visible.
-That left very little GPU for animating the squares.
-
-I should be able to create an alternate plan.
-Like drawing a bunch of lines on a `<g>` element, instead of using a pattern to repeat a single line.
-
-I tried the `<g>`with multiple `<line>` elements.
-The results were similar.
-If I stop the color animation or I do not display the background, performance is good.  Otherwise it it bad.
-I wonder if it's slow to pick the colors. 
+I'm sure I can make the background do more now that I know what to avoid.
+And I bet I will eventually find a way to make the original version more efficient.
 
 ### Grouping Moving Objects
 
@@ -142,3 +147,23 @@ I'm optimistic that this will work again.
 And if it doesn't, then I've learned a lot.
 
 This style of animation is always a small but noticeable amount behind the mouse.
+
+See my notes above.
+I definitely need to try this when I rotate big things in an animation.
+
+### Moving Things Faster
+
+The animation problems are most obvious when the objects are moving slowly.
+When things are racing across the screen it's hard to see enough detail to notice jumpy animation.
+
+This does not solve the problem of glitches.
+Sometimes I see the background when it should be hiding behind something else.
+Both the jumpiness and the glitches when I improved the rotating problem, described above.
+
+## Open Question
+
+Is there a good way to know when the browser is overloaded?
+
+It might make sense to do more animations when you can get away with it.
+But do fewer or simpler animations when there are fewer resources.
+So no one sees jumpy or glitchy animations.
