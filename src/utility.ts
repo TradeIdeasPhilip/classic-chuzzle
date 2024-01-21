@@ -96,3 +96,6 @@ export function take<T>(array: T[]): T {
 }
 
 // And whenever I update phil-lib, sleep should return Promise<void>, not Promise<unknown>.
+
+// And look at my notes regarding requestAnimationFrame.
+// If there isn't already a class to do this, make one!
