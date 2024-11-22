@@ -11,15 +11,7 @@ export default defineConfig({
     outDir: "docs",
     rollupOptions: {
       input: {
-        main: resolve(__dirname, "index.html"),/*
-        scratch: resolve(__dirname, "scratch.html"),
-        topLevel: resolve(__dirname, "top-level.html"),
-        internalTableOfContents: resolve(
-          __dirname,
-          "internal-table-of-contents.html"
-        ),
-        unlimitedScroll: resolve(__dirname, "unlimited-scroll.html"),
-        continuousFontWeight: resolve(__dirname, "continuous-font-weight.html"),*/
+        主要的: resolve(__dirname, "index.html"),
       },
     },
   },

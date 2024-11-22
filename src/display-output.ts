@@ -1,5 +1,5 @@
 import { getById } from "phil-lib/client-misc";
-import { pick, sleep } from "phil-lib/misc";
+import { assertClass, pick, positiveModulo, sleep, take } from "phil-lib/misc";
 import {
   LogicalPiece,
   Color,
@@ -8,7 +8,6 @@ import {
   GroupGroupActions,
   UpdateInstructions,
 } from "./logical-board";
-import { assertClass, positiveModulo, take } from "./utility";
 import {
   Point,
   makeCircle,
@@ -271,6 +270,8 @@ const decorations: ReadonlyArray<string> = [
   "🜇",
   "🝤",
   "⅏",
+  "៚",
+  "๛",
   // https://unicodeemoticons.com/cool_text_icons_and_pictures.htm
   // https://jrgraphix.net/r/Unicode/2600-26FF
   // https://www.compart.com/en/unicode/category/So

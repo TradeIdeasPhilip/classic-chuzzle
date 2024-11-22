@@ -65,7 +65,9 @@ import { initializedArray, pick } from "phil-lib/misc";
       this.element.style.stroke = "cyan";
       this.element.style.strokeWidth = `${(++this.#nextIndex % 200) / 1000}px`;
     }
-    // TODO I can't find it in github but I'm sure I've written a class so I'd never have to do this again.
+    // Don't copy this!  I've written a class so I'd never have to do this again.
+    // See https://tradeideasphilip.github.io/phil-lib/classes/misc.AnimationLoop.html or
+    // https://github.com/TradeIdeasPhilip/phil-lib/blob/faef2046d5e82cc1fc73a28e59cbf09fbb761a0f/misc.ts#L561
     private loop() {
       requestAnimationFrame(() => {
         this.loop();

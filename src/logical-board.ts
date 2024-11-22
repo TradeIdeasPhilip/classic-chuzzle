@@ -17,9 +17,14 @@
  * can update separately; you don't need any special coordination between the sides.
  */
 
-import { initializedArray, pick } from "phil-lib/misc";
+import {
+  initializedArray,
+  pick,
+  positiveModulo,
+  rotateArray,
+  take,
+} from "phil-lib/misc";
 import { findActionable } from "./groups";
-import { positiveModulo, rotateArray, take } from "./utility";
 
 /**
  * If the user let go now, how many cells should we try to rotate?

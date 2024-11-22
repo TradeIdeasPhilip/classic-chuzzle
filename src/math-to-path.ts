@@ -1,5 +1,8 @@
-import { initializedArray, makeLinear } from "phil-lib/misc";
-import { polarToRectangular } from "./utility";
+import { initializedArray, makeLinear, polarToRectangular } from "phil-lib/misc";
+
+// See PathBuilder.addParametricPath() in ../random-svg-tests/src/path-shape.ts
+// for a much more recent version of this idea.  ../random-svg-tests/src/math-to-path.ts
+// is an intermediate version of the math to path idea.
 
 export type Point = { readonly x: number; readonly y: number };
 
