@@ -342,11 +342,18 @@ class GuiPiece {
   readonly decorationBackgroundElement: SVGTextElement;
 
   private readonly bombElement: SVGPathElement;
+  private readonly explosionElement: SVGUseElement;
   get bombVisible(): boolean {
     return this.bombElement.style.display == "";
   }
   set bombVisible(visible: boolean) {
     this.bombElement.style.display = visible ? "" : "none";
+  }
+  get explosionVisible(): boolean {
+    return this.explosionElement.style.display == "";
+  }
+  set explosionVisible(visible: boolean) {
+    this.explosionElement.style.display = visible ? "" : "none";
   }
 
   /**
@@ -479,10 +486,15 @@ class GuiPiece {
       "text.crystal-decoration-background"
     )!;
     this.bombElement = clone.querySelector(".bomb")!;
+    this.explosionElement = assertClass(
+      clone.querySelector("use[href='#explosionMaster']"),
+      SVGUseElement
+    );
     clone.style.fill = piece.color;
     this.decorationBackgroundElement.style.stroke = piece.color;
     this.bombColor = pick(decorationColors.get(piece.color)!);
     this.bombVisible = false;
+    this.explosionVisible = false;
     this.updateFinalPosition(piece);
     boardElement.appendChild(clone);
   }
