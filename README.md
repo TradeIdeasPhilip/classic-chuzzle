@@ -5,6 +5,7 @@
 Missing a lot, but playable.
 
 Here's an old video: https://youtu.be/IjQcdktLzLY.
+And something from 4/20/2025:  https://youtu.be/ALXieon-6w0?si=iET2LWtODnIHVxvN
 
 ## How to Play
 
@@ -32,6 +33,7 @@ No CSS.
 I'm really starting to like math-to-path.ts.
 This is an extension of an [idea I've used before](https://github.com/TradeIdeasPhilip/divide-by-zero/blob/master/src/svg-sine-wave.ts).
 This version is much more general.
+See the [random-svg-tests](https://github.com/TradeIdeasPhilip/random-svg-tests/blob/master/src/math-to-path.ts) project for a newer version of this idea.
 
 ## Unexpected Problems
 
