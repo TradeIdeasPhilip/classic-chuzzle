@@ -27,6 +27,15 @@ import {
 import { findActionable } from "./groups";
 
 /**
+ * These are the changes that will have to happen if the user leaves the
+ * board in a particular state.
+ *
+ * This is basically a list of pieces to destroy.
+ * The rest of the details are hints to the GUI.
+ */
+export type Actionable = ReturnType<typeof findActionable<LogicalPieceImpl>>;
+
+/**
  * If the user let go now, how many cells should we try to rotate?
  * (Previously known as `proposedOffset()`.)
  * @param offset How far the user has moved the pointer.  This might include fractions.
@@ -58,9 +67,7 @@ function rotateLeft(
     // No change.  Return the original.
     return original;
   } else {
-    return original.map((rowIndex) =>
-      rowIndex == originalRow ? newRow : rowIndex
-    );
+    return original.map((row) => (row == originalRow ? newRow : row));
   }
 }
 
@@ -168,8 +175,6 @@ export type PointerActions = {
   release(offset: number): Promise<void>;
 };
 
-type Groups = readonly (readonly LogicalPieceImpl[])[];
-
 /**
  * This controls all of the groups on the screen at once.
  *
@@ -184,7 +189,7 @@ export type GroupGroupActions = {
    * If something was in a group, and destroyed by a bomb, the
    * group gets the score, not this.
    */
-  addToScore(counter: number, bombCount: number): void;
+  addToScore(counter: number): void;
   /**
    * Show which pieces are about to be collected or would hypothetically
    * be collected if the user let go now.
@@ -247,7 +252,7 @@ export type Animator = {
    *
    * @param groups
    */
-  assignGroupDecorations(groups: Groups): GroupGroupActions;
+  assignGroupDecorations(actionable: Actionable): GroupGroupActions;
 
   /**
    * Update the board after making a move.
@@ -340,10 +345,10 @@ export class LogicalBoard {
   }
 
   constructor(private readonly animator: Animator) {
-    this.#allPieces = this.createRandom();
+    this.#allPieces = LogicalBoard.#createRandom();
     this.animator.initializeBoard(this.#allPieces.flat());
   }
-  private createRandom() {
+  static #createRandom() {
     // Start with completely random pieces.
     const result = initializedArray(LogicalBoard.SIZE, (rowIndex) =>
       initializedArray(
@@ -354,7 +359,7 @@ export class LogicalBoard {
     /**
      *  Any groups that could immediately go away.
      */
-    const groups = findActionable(result);
+    const { groups } = findActionable(result);
     // Break up the groups, so nothing will happen until the user makes his first move.
     groups.forEach((group) => {
       group.forEach(({ rowIndex, columnIndex }) => {
@@ -373,16 +378,17 @@ export class LogicalBoard {
             }
           }
         });
-        result[rowIndex][columnIndex] = new LogicalPieceImpl(
+        const newPiece = new LogicalPieceImpl(
           rowIndex,
           columnIndex,
           pick(colors.filter((color) => !nearby.has(color)))
         );
+        result[rowIndex][columnIndex] = newPiece;
+        newPiece.bomb = true;
       });
     });
     return result;
   }
-
   /**
    * Collect all of the pieces in groups.
    * Replace those materials.
@@ -395,8 +401,8 @@ export class LogicalBoard {
    * @param actions The GUI associated with these `groups`.
    * We could try to recompute these, but we want this part of the display to match the preview that we've already shown.
    */
-  private async updateLoop(groups: Groups, actions: GroupGroupActions) {
-    for (let counter = 1; groups.length > 0; counter++) {
+  private async updateLoop(actionable: Actionable, actions: GroupGroupActions) {
+    for (let counter = 1; actionable.groups.length > 0; counter++) {
       /**
        * When we get a group with exactly 5 tiles, we immediately add a bomb to one of the pieces
        * and add that peace to this set.  This tile cannot be removed and this bomb can not be set
@@ -404,7 +410,7 @@ export class LogicalBoard {
        */
       const immuneFromDestruction = new Set<LogicalPiece>();
       const bombFlingingSources: (readonly LogicalPieceImpl[])[] = [];
-      groups.forEach((group) => {
+      actionable.groups.forEach((group) => {
         if (group.length > 5) {
           bombFlingingSources.push(group);
         } else if (group.length == 5) {
@@ -425,66 +431,13 @@ export class LogicalBoard {
        * the group decorations flashed for a moment.  So the user knows
        * why the each piece is being destroyed.
        */
-      const destroyByBomb: LogicalPiece[][] = [];
-      {
-        let recentlyDeleted = groups.flat();
-        const alreadyHandled = new Set<LogicalPiece>(recentlyDeleted);
-        while (true) {
-          /**
-           * These bombs were set off in the previous round.
-           * We need to record which new cells get deleted by these bombs.
-           */
-          const newBombs = recentlyDeleted.filter(
-            (logicalPiece) =>
-              logicalPiece.bomb && !immuneFromDestruction.has(logicalPiece)
-          );
-          if (newBombs.length == 0) {
-            break;
-          }
-          recentlyDeleted.length = 0;
-          for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
-            for (let columnOffset = -1; columnOffset <= 1; columnOffset++) {
-              newBombs.forEach((piece) => {
-                const possible =
-                  this.#allPieces[piece.rowIndex + rowOffset]?.[
-                    piece.columnIndex + columnOffset
-                  ];
-                if (possible && !alreadyHandled.has(possible)) {
-                  recentlyDeleted.push(possible);
-                  alreadyHandled.add(possible);
-                }
-              });
-            }
-          }
-          destroyByBomb.push(recentlyDeleted);
-        }
-      }
-      console.log(destroyByBomb);
-      // TODO
-      // need bombs
-      // need to make bombs explode
-      // ✔️ need to have a new category so addToScore can handle pieces that were destroyed by a bomb
-      //   and only by a bomb.  If a piece was already part of a group, score it with the group.
-      // ✔️ the score just gets a total number of cells bombed.
-      // in Animator.updateBoard() we need to highlight the cells that are getting destroyed by a bomb.
-      //   Make the bomb flash, just where the group decoration would have been.
-      //   Make all bombs flash between black and white.
-      //   Make them all have similar but slightly different periods.
-      //   Group them based on time.
-      //   First the group decorations start to flash.
-      //   Then after a short pause we highlight any cells next to any bombs that were in the groups.
-      //   Then after another short pause we highlight any cells next to any bombs that got set off in the previous line.
-      //   And repeat forever.
-      //   Maybe all new flashing bombs that appear at the same time flash at the same rate.
-      //   And each generation flashes faster than the previous generation.
-      // And these cells need to disappear.
-      //   spiral outward from the current position, unlike the groups that leave in a straight line.
-      //   require more time?  Start a little early?
-      // Delete these items just like items in the groups.  They will be filled in the same way.
-      actions.addToScore(counter, destroyByBomb.flat().length);
+      actions.addToScore(counter);
 
-      const piecesToRemove = groups.flatMap((group) =>
+      const piecesToRemove = actionable.groups.flatMap((group) =>
         group.filter((piece) => !immuneFromDestruction.has(piece))
+      );
+      actionable.explosions.forEach((epoch) =>
+        epoch.forEach((piece) => piecesToRemove.push(piece))
       );
       const piecesToAdd = this.removePieces(piecesToRemove);
 
@@ -509,14 +462,14 @@ export class LogicalBoard {
         remove: piecesToRemove,
         counter,
         flingBomb,
-        destroyByBomb,
+        destroyByBomb: actionable.explosions,
         add: piecesToAdd,
       });
 
       flingBomb.flat().forEach(({ destination }) => (destination.bomb = true));
 
-      groups = findActionable(this.#allPieces);
-      actions = this.animator.assignGroupDecorations(groups);
+      actionable = findActionable(this.#allPieces);
+      actions = this.animator.assignGroupDecorations(actionable);
       actions.highlightGroups();
     }
     // Tell the GUI that we are done?  In the previous code we did this:
@@ -540,9 +493,9 @@ export class LogicalBoard {
      */
     const allPossibilities = initializedArray(LogicalBoard.SIZE, (index) => {
       const pieces = rotateLeft(this.#allPieces, rowIndex, -index);
-      const groups = findActionable(pieces);
-      const actions = this.animator.assignGroupDecorations(groups);
-      return { actions, groups, pieces };
+      const actionable: Actionable = findActionable(pieces);
+      const actions = this.animator.assignGroupDecorations(actionable);
+      return { actions, actionable, pieces };
     });
     const preview = (offset: number): void => {
       const row = this.#allPieces[rowIndex];
@@ -552,13 +505,14 @@ export class LogicalBoard {
     const release = async (offset: number): Promise<void> => {
       preview(offset);
       const proposedOffset = roundedOffset(offset);
-      const revert = allPossibilities[proposedOffset].groups.length == 0;
+      const revert =
+        allPossibilities[proposedOffset].actionable.groups.length == 0;
       const finalOffset = revert ? 0 : proposedOffset;
       const finalState = allPossibilities[finalOffset]; // drawOffsetNow(row, 2.3, "row").  All relative to the original position of the cells.  same for drawOffsetAnimated() versions.  update the internal state after the animation has finished.  NO CHANGES AT all in LogicalBoard or LogicalPiece until the animation is done.  GuiPiece will keep track on the position while previewing.
       this.setAllPieces(finalState.pieces);
       const row = this.#allPieces[rowIndex];
       await this.animator.rotateTo("horizontal", row);
-      await this.updateLoop(finalState.groups, finalState.actions);
+      await this.updateLoop(finalState.actionable, finalState.actions);
     };
     return { preview, release };
   }
@@ -571,9 +525,9 @@ export class LogicalBoard {
      */
     const allPossibilities = initializedArray(LogicalBoard.SIZE, (index) => {
       const pieces = rotateUp(this.#allPieces, columnIndex, -index);
-      const groups = findActionable(pieces);
-      const actions = this.animator.assignGroupDecorations(groups);
-      return { actions, groups, pieces };
+      const actionable: Actionable = findActionable(pieces);
+      const actions = this.animator.assignGroupDecorations(actionable);
+      return { actions, actionable, pieces };
     });
     const preview = (offset: number): void => {
       const column = this.getColumn(columnIndex);
@@ -583,13 +537,14 @@ export class LogicalBoard {
     const release = async (offset: number): Promise<void> => {
       preview(offset);
       const proposedOffset = roundedOffset(offset);
-      const revert = allPossibilities[proposedOffset].groups.length == 0;
+      const revert =
+        allPossibilities[proposedOffset].actionable.groups.length == 0;
       const finalOffset = revert ? 0 : proposedOffset;
       const finalState = allPossibilities[finalOffset];
       this.setAllPieces(finalState.pieces);
       const column = this.getColumn(columnIndex);
       await this.animator.rotateTo("vertical", column);
-      await this.updateLoop(finalState.groups, finalState.actions);
+      await this.updateLoop(finalState.actionable, finalState.actions);
     };
     return { preview, release };
   }

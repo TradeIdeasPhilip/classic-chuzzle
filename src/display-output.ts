@@ -7,6 +7,7 @@ import {
   Animator,
   GroupGroupActions,
   UpdateInstructions,
+  Actionable,
 } from "./logical-board";
 import {
   Point,
@@ -15,10 +16,6 @@ import {
   mathToPath,
   spiralPath,
 } from "./math-to-path";
-
-// TODO exponential changes in speed.  If the user makes one move and that sets off several automatic moves
-// in a row, each of the automatic moves in the series should take less time than the previous one.  So people
-// don't get bored.
 
 /**
  * This is where we are documenting what will be added to the score.
@@ -308,21 +305,6 @@ function distanceToDuration(needToMove: number): number {
  */
 const boardElement = getById("board", SVGElement);
 
-function clearAllDecorations() {
-  boardElement
-    .querySelectorAll<SVGTextElement>(
-      "text.crystal-decoration,text.crystal-decoration-background"
-    )
-    .forEach((element) => (element.textContent = ""));
-  // TODO do I need to worry about animations?
-  // GuiPiece.cancelGroup() did this:  guiPiece.element.getAnimations().forEach((animation) => animation.cancel());
-  // See GuiPiece.removeDecoration(), now.  It does a better job
-  // removing animations.  It removes the animations from the
-  // decorations, and nothing else.  That is not required
-  // when clearAllDecorations() is called, but it wouldn't
-  // hurt, either.
-}
-
 type HasPosition = { readonly rowIndex: number; columnIndex: number };
 
 /**
@@ -341,19 +323,19 @@ class GuiPiece {
   readonly decorationElement: SVGTextElement;
   readonly decorationBackgroundElement: SVGTextElement;
 
-  private readonly bombElement: SVGPathElement;
-  private readonly explosionElement: SVGUseElement;
+  readonly #bombElement: SVGPathElement;
+  readonly #explosionElement: SVGUseElement;
   get bombVisible(): boolean {
-    return this.bombElement.style.display == "";
+    return this.#bombElement.style.display == "";
   }
   set bombVisible(visible: boolean) {
-    this.bombElement.style.display = visible ? "" : "none";
+    this.#bombElement.style.display = visible ? "" : "none";
   }
   get explosionVisible(): boolean {
-    return this.explosionElement.style.display == "";
+    return this.#explosionElement.style.display == "";
   }
   set explosionVisible(visible: boolean) {
-    this.explosionElement.style.display = visible ? "" : "none";
+    this.#explosionElement.style.display = visible ? "" : "none";
   }
 
   /**
@@ -485,15 +467,15 @@ class GuiPiece {
     this.decorationBackgroundElement = clone.querySelector(
       "text.crystal-decoration-background"
     )!;
-    this.bombElement = clone.querySelector(".bomb")!;
-    this.explosionElement = assertClass(
+    this.#bombElement = clone.querySelector(".bomb")!;
+    this.#explosionElement = assertClass(
       clone.querySelector("use[href='#explosionMaster']"),
       SVGUseElement
     );
     clone.style.fill = piece.color;
     this.decorationBackgroundElement.style.stroke = piece.color;
     this.bombColor = pick(decorationColors.get(piece.color)!);
-    this.bombVisible = false;
+    this.bombVisible = piece.bomb;
     this.explosionVisible = false;
     this.updateFinalPosition(piece);
     boardElement.appendChild(clone);
@@ -557,10 +539,10 @@ class GuiPiece {
     (this as any).element = "💀";
   }
   get bombColor() {
-    return this.bombElement.style.fill;
+    return this.#bombElement.style.fill;
   }
   set bombColor(newColor) {
-    this.bombElement.style.fill = newColor;
+    this.#bombElement.style.fill = newColor;
   }
   removeDecoration() {
     [this.decorationElement, this.decorationBackgroundElement].forEach(
@@ -569,6 +551,7 @@ class GuiPiece {
         element.getAnimations().forEach((animation) => animation.cancel());
       }
     );
+    this.explosionVisible = false;
   }
 }
 
@@ -689,6 +672,17 @@ class AnimatorImpl implements Animator {
      * are about to be harvested.
      */
     const initialDelay = 2000 * durationFactor;
+
+    request.destroyByBomb.flat().forEach((piece, index, array) => {
+      const guiPiece = this.#guiPieces.get(piece);
+      if (guiPiece === undefined) {
+        throw new Error("wtf");
+      }
+      guiPiece.explosionVisible = false;
+      setTimeout(() => {
+        guiPiece.explosionVisible = true;
+      }, (initialDelay / array.length) * index);
+    });
 
     const bombsToFling = request.flingBomb.map((group) =>
       group.map(({ source, destination }) => {
@@ -934,10 +928,11 @@ class AnimatorImpl implements Animator {
     await Promise.all(promises);
   }
 
-  assignGroupDecorations(
-    groups: ReadonlyArray<ReadonlyArray<LogicalPiece>>
-  ): GroupGroupActions {
-    if (groups.length == 0) {
+  assignGroupDecorations(actionable: Actionable): GroupGroupActions {
+    const clearAllDecorations = () => {
+      this.#guiPieces.forEach((piece) => piece.removeDecoration());
+    };
+    if (actionable.groups.length == 0) {
       // This is a minor optimization.  Mostly I didn't want to
       // make a copy of decorations unless I needed to.
       return {
@@ -951,7 +946,7 @@ class AnimatorImpl implements Animator {
       /**
        * Data that we compute once then save for later.
        */
-      const savedGroupInfo = groups.map((pieces) => {
+      const savedGroupInfo = actionable.groups.map((pieces) => {
         const backgroundColor = pieces[0].color;
         const decorationColor = pick(decorationColors.get(backgroundColor)!);
         const decorationText = take(decorationsAvailable);
@@ -964,8 +959,17 @@ class AnimatorImpl implements Animator {
         });
         return { guiPieces, decorationColor, decorationText, backgroundColor };
       });
+      const explosions = actionable.explosions.map((epoch) =>
+        epoch.map((piece) => {
+          const guiPiece = this.#guiPieces.get(piece);
+          if (guiPiece == undefined) {
+            throw new Error("wtf");
+          }
+          return guiPiece;
+        })
+      );
       return {
-        addToScore(counter: number, bombCount: number) {
+        addToScore(counter: number) {
           // Flash the items about to be collected.
           savedGroupInfo.forEach(({ guiPieces }) => {
             const maxOpacity = 1;
@@ -1014,6 +1018,7 @@ class AnimatorImpl implements Animator {
               newScoreDiv.appendChild(span);
             }
           );
+          const bombCount = actionable.explosions.flat().length;
           if (bombCount > 0) {
             if (savedGroupInfo.length > 0) {
               newScoreDiv.append(" + ");
@@ -1050,6 +1055,9 @@ class AnimatorImpl implements Animator {
               });
             }
           );
+          explosions.flat().forEach((piece) => {
+            piece.explosionVisible = true;
+          });
         },
       };
     }

@@ -147,54 +147,14 @@ import { initializedArray, pick } from "phil-lib/misc";
     )
   );
 
-  const lineColors: Pauseable[] = [
-    //new ColorAnimator(black, "black"),
-    //new ColorAnimator(white, "white"),
-    black.animate(
-      colors.flatMap((color, index, array) => [
-        { stroke: "black", offset: index / array.length },
-        { stroke: color, offset: (index + 0.25) / array.length },
-        { stroke: color, offset: (index + 0.75) / array.length },
-        { stroke: "black", offset: (index + 1) / array.length },
-      ]),
-      {
-        duration: 3210 * colors.length,
-        iterations: Infinity,
-        //easing: `steps(${colors.length * 2}, jump-start)`,
-      }
-    ),
-    white.animate(
-      colors.flatMap((color, index, array) => [
-        { stroke: "white", offset: index / array.length },
-        { stroke: color, offset: (index + 0.25) / array.length },
-        { stroke: color, offset: (index + 0.75) / array.length },
-        { stroke: "white", offset: (index + 1) / array.length },
-      ]),
-      {
-        duration: 4321 * colors.length,
-        iterations: Infinity,
-        //easing: `steps(${colors.length * 2}, jump-start)`,
-      }
-    ),
-  ];
-
-  const backWallColors: Pauseable = getById("main", SVGSVGElement).animate(
-    { backgroundColor: ["#202020", "#e0e0e0", "#202020"] },
-    { duration: 97531, direction: "alternate", iterations: Infinity }
+  ([[rotations, "line rotations", "checked"]] as const).forEach(
+    ([pauseables, text, initialState]) => {
+      addCheckBox(`Animate ${text}`, initialState, (currentlyChecked): void => {
+        const action = currentlyChecked ? "play" : "pause";
+        pauseables.forEach((pauseable) => pauseable[action]());
+      });
+    }
   );
-
-  (
-    [
-      [rotations, "line rotations", "checked"],
-      [lineColors, "line colors", "unchecked"],
-      [[backWallColors], "back wall colors", "checked"],
-    ] as const
-  ).forEach(([pauseables, text, initialState]) => {
-    addCheckBox(`Animate ${text}`, initialState, (currentlyChecked): void => {
-      const action = currentlyChecked ? "play" : "pause";
-      pauseables.forEach((pauseable) => pauseable[action]());
-    });
-  });
 
   const curtainElement = getById("curtain", SVGRectElement);
   (
