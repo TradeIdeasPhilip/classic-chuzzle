@@ -384,7 +384,9 @@ export class LogicalBoard {
           pick(colors.filter((color) => !nearby.has(color)))
         );
         result[rowIndex][columnIndex] = newPiece;
-        newPiece.bomb = true;
+        // This was some debug code. 
+        // I wanted to create more bombs more quickly.
+        //newPiece.bomb = true;
       });
     });
     return result;

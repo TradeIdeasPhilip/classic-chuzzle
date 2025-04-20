@@ -11,7 +11,7 @@ export default defineConfig({
     outDir: "docs",
     rollupOptions: {
       input: {
-        主要的: resolve(__dirname, "index.html"),
+        "\u2000\u2001\u2002\u2003": resolve(__dirname, "index.html"),
       },
     },
   },
